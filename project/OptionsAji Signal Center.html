@@ -414,33 +414,14 @@ function NewsItem({ item, isNew }) {
   );
 }
 
-/* ── Tweaks ── */
-function TweaksWrapper(){
-  const [tweaks,setTweak]=useTweaks(/*EDITMODE-BEGIN*/{
+/* ── Main App ── */
+function App() {
+  const [tweaks, setTweak] = useTweaks(/*EDITMODE-BEGIN*/{
     "accentColor": "#D4AF37",
     "liveUpdates": true,
     "updateIntervalSec": 10
   }/*EDITMODE-END*/);
-  useEffect(()=>{
-    document.documentElement.style.setProperty('--gold',tweaks.accentColor);
-    document.documentElement.style.setProperty('--gold-dim',tweaks.accentColor+'1a');
-    document.documentElement.style.setProperty('--border',tweaks.accentColor+'26');
-  },[tweaks]);
-  return (
-    <TweaksPanel>
-      <TweakSection title="品牌色">
-        <TweakColor label="强调色" value={tweaks.accentColor} onChange={v=>setTweak('accentColor',v)}/>
-      </TweakSection>
-      <TweakSection title="实时更新">
-        <TweakToggle label="启用实时新闻" value={tweaks.liveUpdates} onChange={v=>setTweak('liveUpdates',v)}/>
-        <TweakSlider label="更新间隔（秒）" value={tweaks.updateIntervalSec} min={5} max={30} step={1} onChange={v=>setTweak('updateIntervalSec',v)}/>
-      </TweakSection>
-    </TweaksPanel>
-  );
-}
 
-/* ── Main App ── */
-function App() {
   const [sigFilter, setSigFilter] = useState({ ticker:'all', type:'all', priority:'all', time:'live' });
   const [newsTab, setNewsTab] = useState('all');
   const [signals] = useState(INITIAL_SIGNALS);
@@ -449,8 +430,16 @@ function App() {
   const [liveCount, setLiveCount] = useState(0);
   const poolIdx = useRef(0);
 
+  // Sync accent color to CSS variables
+  useEffect(() => {
+    document.documentElement.style.setProperty('--gold', tweaks.accentColor);
+    document.documentElement.style.setProperty('--gold-dim', tweaks.accentColor + '1a');
+    document.documentElement.style.setProperty('--border', tweaks.accentColor + '26');
+  }, [tweaks.accentColor]);
+
   // Simulate live news arriving
   useEffect(() => {
+    if (!tweaks.liveUpdates) return;
     const id = setInterval(() => {
       const item = LIVE_NEWS_POOL[poolIdx.current % LIVE_NEWS_POOL.length];
       poolIdx.current++;
@@ -459,9 +448,9 @@ function App() {
       setNewNewsIds(s => new Set([...s, newItem.id]));
       setLiveCount(c => c+1);
       setTimeout(() => setNewNewsIds(s => { const n=new Set(s); n.delete(newItem.id); return n; }), 2000);
-    }, 14000);
+    }, tweaks.updateIntervalSec * 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [tweaks.liveUpdates, tweaks.updateIntervalSec]);
 
   // Filter signals
   const filteredSigs = signals.filter(s => {
@@ -571,7 +560,15 @@ function App() {
           </div>
         </div>
       </div>
-      <TweaksWrapper/>
+      <TweaksPanel>
+        <TweakSection label="品牌色">
+          <TweakColor label="强调色" value={tweaks.accentColor} onChange={v=>setTweak('accentColor',v)}/>
+        </TweakSection>
+        <TweakSection label="实时更新">
+          <TweakToggle label="启用实时新闻" value={tweaks.liveUpdates} onChange={v=>setTweak('liveUpdates',v)}/>
+          <TweakSlider label="更新间隔（秒）" value={tweaks.updateIntervalSec} min={5} max={30} step={1} onChange={v=>setTweak('updateIntervalSec',v)}/>
+        </TweakSection>
+      </TweaksPanel>
     </div>
   );
 }
