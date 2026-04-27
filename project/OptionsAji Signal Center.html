@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OptionsAji — 信号中心</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<style>
+:root {
+  --bg:#0A1628; --panel:#111D2E; --panel2:#0D1829;
+  --border:rgba(212,175,55,.15); --border2:rgba(255,255,255,.06);
+  --gold:#D4AF37; --gold-dim:rgba(212,175,55,.10);
+  --green:#00D4AA; --red:#FF6B6B; --blue:#4A9EFF; --purple:#9B6DFF;
+  --text:#E8E6E0; --muted:#8B8D97;
+  --mono:'JetBrains Mono',monospace; --ui:'Space Grotesk',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body,#root{height:100%;overflow:hidden}
+body{font-family:var(--ui);background:var(--bg);color:var(--text)}
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(212,175,55,.2);border-radius:2px}
+
+@keyframes slideDown{from{opacity:0;transform:translateY(-18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+@keyframes urgentPulse{0%,100%{box-shadow:0 0 0 0 rgba(255,107,107,0)}50%{box-shadow:0 0 16px 3px rgba(255,107,107,.25)}}
+@keyframes goldPulse{0%,100%{box-shadow:0 0 0 0 rgba(212,175,55,0)}50%{box-shadow:0 0 16px 3px rgba(212,175,55,.2)}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+
+.fu{animation:fadeUp .35s ease forwards}
+.sd{animation:slideDown .4s cubic-bezier(.16,1,.3,1) forwards}
+
+/* Shell */
+.shell{display:grid;grid-template-columns:240px 1fr;height:100vh;overflow:hidden}
+
+/* Sidebar */
+.sb{background:var(--panel2);border-right:1px solid var(--border2);display:flex;flex-direction:column}
+.sb-logo{padding:18px 16px 14px;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:10px}
+.lm{width:32px;height:32px;background:linear-gradient(135deg,#D4AF37,#a8832a);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#0A1628;flex-shrink:0}
+.sb-nav{flex:1;padding:10px 8px;overflow-y:auto}
+.ni{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;cursor:pointer;margin-bottom:2px;font-size:13.5px;color:var(--muted);border:1px solid transparent;transition:all .15s;user-select:none}
+.ni:hover{background:rgba(255,255,255,.04);color:var(--text)}
+.ni.on{background:var(--gold-dim);border-color:var(--border);color:var(--gold)}
+.nic{width:16px;height:16px;flex-shrink:0}
+.nb{margin-left:auto;background:var(--gold);color:#0A1628;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px}
+.nb.red{background:var(--red);color:#fff}
+.sb-foot{padding:10px 14px;border-top:1px solid var(--border2)}
+.sb-user{padding:10px 14px;border-top:1px solid var(--border2);display:flex;align-items:center;gap:10px}
+.uav{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#2a4a6a,#1a3a5a);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--gold);flex-shrink:0}
+
+/* Main */
+.main{display:flex;flex-direction:column;overflow:hidden}
+
+/* Filter bar */
+.filterbar{padding:10px 18px;border-bottom:1px solid var(--border2);background:var(--panel2);display:flex;align-items:center;gap:14px;flex-shrink:0;flex-wrap:wrap}
+.filter-group{display:flex;align-items:center;gap:6px}
+.filter-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;white-space:nowrap}
+.filter-tabs{display:flex;gap:2px;background:rgba(255,255,255,.03);border:1px solid var(--border2);padding:2px;border-radius:6px}
+.ftab{padding:3px 9px;border-radius:4px;font-size:11.5px;cursor:pointer;color:var(--muted);transition:all .12s;white-space:nowrap}
+.ftab.on{background:var(--gold-dim);color:var(--gold);border:1px solid var(--border)}
+.ftab:hover:not(.on){color:var(--text)}
+.fbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+.live-chip{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--green);background:rgba(0,212,170,.08);border:1px solid rgba(0,212,170,.2);padding:3px 10px;border-radius:10px}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--green);animation:pulse 1.2s ease infinite;flex-shrink:0}
+
+/* Two-column layout */
+.cols{flex:1;display:grid;grid-template-columns:1fr .67fr;overflow:hidden}
+.col{display:flex;flex-direction:column;overflow:hidden}
+.col-left{border-right:1px solid var(--border2)}
+.col-header{padding:10px 16px;border-bottom:1px solid var(--border2);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.col-title{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;display:flex;align-items:center;gap:6px}
+.col-count{background:rgba(255,255,255,.06);padding:1px 7px;border-radius:10px;font-size:10px;color:var(--muted)}
+.col-scroll{flex:1;overflow-y:auto;padding:10px 14px;display:flex;flex-direction:column;gap:8px}
+
+/* Signal cards */
+.sig-card{background:var(--panel);border:1px solid var(--border2);border-radius:10px;padding:13px 14px;cursor:pointer;transition:border-color .2s,transform .15s;position:relative;overflow:hidden}
+.sig-card:hover{border-color:var(--border);transform:translateY(-1px)}
+.sig-card.priority-high{border-color:rgba(212,175,55,.4);animation:goldPulse 3s ease infinite}
+.sig-card.priority-urgent{border-color:rgba(255,107,107,.5);animation:urgentPulse 2.5s ease infinite}
+.sig-card::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;border-radius:10px 10px 0 0}
+.sig-card.gex::before{background:linear-gradient(90deg,var(--gold),transparent 70%)}
+.sig-card.flow::before{background:linear-gradient(90deg,var(--blue),transparent 70%)}
+.sig-card.news-trump::before{background:linear-gradient(90deg,var(--red),#ff4444 30%,transparent 70%)}
+.sig-card.news::before{background:linear-gradient(90deg,var(--red),transparent 70%)}
+.sig-card.strategy::before{background:linear-gradient(90deg,var(--green),transparent 70%)}
+.sig-card.macro::before{background:linear-gradient(90deg,var(--purple),transparent 70%)}
+
+.sig-top{display:flex;align-items:center;gap:8px;margin-bottom:7px}
+.sig-type-tag{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.sig-type-tag.gex{background:rgba(212,175,55,.12);color:var(--gold);border:1px solid rgba(212,175,55,.25)}
+.sig-type-tag.flow{background:rgba(74,158,255,.12);color:var(--blue);border:1px solid rgba(74,158,255,.25)}
+.sig-type-tag.news{background:rgba(255,107,107,.12);color:var(--red);border:1px solid rgba(255,107,107,.25)}
+.sig-type-tag.strategy{background:rgba(0,212,170,.12);color:var(--green);border:1px solid rgba(0,212,170,.25)}
+.sig-type-tag.macro{background:rgba(155,109,255,.12);color:var(--purple);border:1px solid rgba(155,109,255,.25)}
+.sig-time{font-size:10px;color:var(--muted);margin-left:auto;font-family:var(--mono)}
+.trump-badge{display:inline-flex;align-items:center;gap:4px;background:rgba(255,107,107,.15);border:1px solid rgba(255,107,107,.3);color:var(--red);font-size:9.5px;font-weight:700;padding:1px 7px;border-radius:10px;animation:blink 2s ease infinite}
+
+.sig-title{font-size:13.5px;font-weight:600;color:var(--text);line-height:1.4;margin-bottom:8px}
+.sig-title.urgent{color:#ff9090}
+
+.sig-meta{display:flex;align-items:center;gap:12px;margin-bottom:8px;flex-wrap:wrap}
+.sig-meta-item{display:flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}
+.sig-meta-item strong{color:var(--text);font-weight:600}
+.sig-direction{font-size:11px;font-weight:700}
+.sig-direction.bull{color:var(--green)}.sig-direction.bear{color:var(--red)}.sig-direction.neut{color:var(--muted)}
+.sig-strength{display:flex;gap:2px;align-items:center}
+.str-block{width:7px;height:10px;border-radius:1.5px}
+.str-block.on{background:var(--gold)}.str-block.off{background:rgba(255,255,255,.1)}
+.str-block.urgent.on{background:var(--red)}
+
+.sig-summary{font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:10px;padding:8px 10px;background:rgba(0,0,0,.2);border-radius:6px;border-left:2px solid var(--border2)}
+.sig-summary.gex-l{border-left-color:var(--gold)}
+.sig-summary.flow-l{border-left-color:var(--blue)}
+.sig-summary.news-l{border-left-color:var(--red)}
+.sig-summary.strategy-l{border-left-color:var(--green)}
+
+.sig-actions{display:flex;align-items:center;gap:8px}
+.sig-btn{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;border:1px solid var(--border2);background:transparent;color:var(--muted);font-family:var(--ui);transition:all .15s}
+.sig-btn:hover{border-color:var(--border);color:var(--text)}
+.sig-btn.primary{color:var(--gold);border-color:rgba(212,175,55,.3);background:var(--gold-dim)}
+.sig-btn.primary:hover{background:rgba(212,175,55,.18)}
+.sig-btn.discord{color:var(--blue);border-color:rgba(74,158,255,.25)}
+
+/* Impact bar (options flow visual) */
+.flow-visual{display:flex;gap:4px;margin-bottom:8px;align-items:flex-end;height:28px}
+.flow-bar{border-radius:2px 2px 0 0;flex:1}
+
+/* News column */
+.news-source-tabs{display:flex;gap:2px;padding:0 14px 10px;flex-shrink:0}
+.nstab{padding:4px 12px;border-radius:5px;font-size:11.5px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all .12s}
+.nstab.on{color:var(--gold);border-bottom-color:var(--gold)}
+.nstab:hover:not(.on){color:var(--text)}
+
+.news-item{padding:10px 0;border-bottom:1px solid var(--border2);cursor:pointer;transition:background .15s}
+.news-item:hover{background:rgba(255,255,255,.02);margin:0 -14px;padding:10px 14px;border-radius:6px}
+.news-item:last-child{border-bottom:none}
+.news-top{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+.src-icon{width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;flex-shrink:0}
+.src-name{font-size:11px;color:var(--muted);flex:1}
+.news-time{font-size:10px;color:var(--muted);font-family:var(--mono)}
+.news-sentiment{font-size:10px;font-weight:700;display:flex;align-items:center;gap:3px}
+.news-sentiment.bull{color:var(--green)}.news-sentiment.bear{color:var(--red)}.news-sentiment.neut{color:var(--muted)}
+.news-headline{font-size:12.5px;color:var(--text);line-height:1.45;margin-bottom:5px}
+.news-tags{display:flex;gap:4px;flex-wrap:wrap}
+.news-tag{padding:1px 6px;border-radius:3px;font-size:9.5px;font-family:var(--mono);background:rgba(255,255,255,.06);color:var(--muted)}
+.trump-news-badge{display:inline-flex;align-items:center;gap:3px;background:rgba(255,107,107,.12);border:1px solid rgba(255,107,107,.3);color:var(--red);font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px}
+.news-expand{font-size:11px;color:var(--muted);padding:6px 8px;background:rgba(0,0,0,.2);border-radius:5px;margin-top:6px;line-height:1.55;border-left:2px solid var(--border)}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+const { useState, useEffect, useRef } = React;
+
+/* ── Static signal data ── */
+const INITIAL_SIGNALS = [
+  {
+    id: 1, type: 'gex', priority: 'high',
+    tag: 'GEX Alert', time: '2 min ago',
+    title: 'SPY GEX Regime 切换：Positive → Negative Gamma',
+    ticker: 'SPY', direction: 'bear', strength: 5,
+    summary: '截至 14:32，SPY Net GEX 从 +2.1B 下滑至 -0.4B，Gamma Flip 位 543 已被有效跌破。在 Negative Gamma 环境下，做市商将顺势对冲（price↓ → sell delta），波动率扩张风险显著上升。建议警惕 535 Put Wall 是否支撑。',
+    left: '＄净GEX', right: '-0.4B', summaryType: 'gex-l',
+  },
+  {
+    id: 2, type: 'flow', priority: 'medium',
+    tag: 'Flow Alert', time: '8 min ago',
+    title: 'NVDA 异常 Call 扫单：5,000 张 $140C，到期 5/9',
+    ticker: 'NVDA', direction: 'bull', strength: 4,
+    summary: '大单扫入 NVDA 5月9日到期 $140 Call，合约张数 5,000，名义价值约 $220万，溢价成交（Ask + $0.15）。IV 同步拉升至 62%。信号来源：Unusual Whales + 内部 Flow Scanner。疑似财报前布局或消息面驱动。',
+    summaryType: 'flow-l',
+    flowBars: [20,35,55,40,80,65,90,75,45,60,85,95],
+  },
+  {
+    id: 3, type: 'news', priority: 'urgent', isTrump: true,
+    tag: 'News Alert', time: '12 min ago',
+    title: 'Trump 发推：宣布对中国商品加征 35% 新关税',
+    ticker: 'SPY', direction: 'bear', strength: 5,
+    tweetText: '"China has been RIPPING US OFF for years. New 35% tariffs effective immediately. No exceptions, no negotiations. AMERICA FIRST! 🇺🇸"',
+    tweetTime: '14:28 · April 27, 2026',
+    summary: '基于历史数据，Trump 关税推文后 SPY 平均在 15 分钟内下跌 0.6–1.2%。当前 Negative Gamma 环境将放大跌幅。建议立即评估现有多头头寸风险，考虑买入短期 Put 对冲。关键支撑：535（Put Wall）、530（期权密集区）。',
+    summaryType: 'news-l',
+  },
+  {
+    id: 4, type: 'macro', priority: 'medium',
+    tag: 'Macro', time: '25 min ago',
+    title: 'VIX 突破 20.0，波动率扩张信号触发',
+    ticker: 'VIX', direction: 'bear', strength: 3,
+    summary: 'VIX 收于 20.3，为近 3 周最高。VIX 期货 Term Structure 出现 Backwardation（近月 > 远月），显示市场对近期尾部风险的定价急剧上升。历史上 VIX 突破 20 后，SPY 在接下来 5 个交易日内下跌概率为 68%。',
+    summaryType: 'news-l',
+  },
+  {
+    id: 5, type: 'strategy', priority: 'medium',
+    tag: 'Strategy', time: '34 min ago',
+    title: 'AAPL 财报前 IV Crush 预警 — 5/1 盘后',
+    ticker: 'AAPL', direction: 'neut', strength: 3,
+    summary: 'AAPL 将于 5月1日盘后公布 Q2 财报。ATM IV 当前 38%（IV Rank: 78%ile）。历史 IV Crush 均值为 -42%。建议财报前卖方策略：Iron Condor 或 Straddle Sell，需在财报前 1-2 天建仓以最大化 Theta 收益。注意 $195 为关键支撑位（高 Call OI）。',
+    summaryType: 'strategy-l',
+  },
+  {
+    id: 6, type: 'strategy', priority: 'low',
+    tag: 'Strategy', time: '1 hr ago',
+    title: '每日 SPY 策略建议：Credit Put Spread 风险/收益评估',
+    ticker: 'SPY', direction: 'bull', strength: 3,
+    summary: '基于今日开盘 GEX 数据（当时为 Positive +1.8B），建议 Credit Put Spread：Sell 540P / Buy 535P，到期 5/2，收益/风险约 1:2.2。注意：下午 GEX Regime 已转负，原策略风险上升，建议缩小仓位或暂缓入场。',
+    summaryType: 'strategy-l',
+  },
+];
+
+/* ── News feed data ── */
+const INITIAL_NEWS = [
+  { id:1, src:'@DeItaone', srcColor:'#1d9bf0', srcBg:'#0f3a5a', time:'2 min ago', headline:'*BREAKING: Trump Signs Executive Order on China Tariffs — WSJ', sentiment:'bear', tags:['SPY','DXY'], isTrump:true, ai:'此消息将推动 SPY 短期下跌 0.5–1%，DXY 走强，黄金受益。期权市场 Put 需求将激增。' },
+  { id:2, src:'Bloomberg', srcColor:'#ff6600', srcBg:'#3a1a00', time:'5 min ago', headline:'Fed\'s Waller: Still need "several months" of good inflation data before rate cuts — Full Speech', sentiment:'bear', tags:['SPY','TLT'], ai:'鹰派言论打压降息预期，债券承压。SPY短线偏空。' },
+  { id:3, src:'@zerohedge', srcColor:'#aaa', srcBg:'#1a1a1a', time:'9 min ago', headline:'VIX spikes to 20.3 as dealers scramble to hedge short gamma exposure heading into week end', sentiment:'bear', tags:['VIX','SPY'], ai:'做市商 Short Gamma 对冲需求加速波动率上升，形成正反馈循环。' },
+  { id:4, src:'@unusual_whales', srcColor:'#9B6DFF', srcBg:'#1e1030', time:'15 min ago', headline:'$NVDA seeing aggressive call buying today: 5,000x $140C 5/9 @ $0.43 premium — Institutional flow detected', sentiment:'bull', tags:['NVDA'], ai:'大额期权流显示机构看涨布局，可能有事件驱动（财报/产品发布）。' },
+  { id:5, src:'Bloomberg', srcColor:'#ff6600', srcBg:'#3a1a00', time:'22 min ago', headline:'Apple Q2 earnings due May 1 after close; Options market pricing ±4.2% move vs historical ±3.8%', sentiment:'neut', tags:['AAPL'], ai:'隐含波动率高于历史均值，买方策略性价比偏低，卖方机会更佳。' },
+  { id:6, src:'@DeItaone', srcColor:'#1d9bf0', srcBg:'#0f3a5a', time:'28 min ago', headline:'*US INITIAL JOBLESS CLAIMS 218K VS EST 220K — DEPT OF LABOR', sentiment:'bull', tags:['SPY','DXY'], ai:'就业数据略优于预期，短期支撑美股。但关税消息中和利好。' },
+  { id:7, src:'@SpotGamma', srcColor:'#00D4AA', srcBg:'#003a2a', time:'35 min ago', headline:'SPY net GEX has crossed below zero — entering negative gamma territory. Expect vol expansion this PM.', sentiment:'bear', tags:['SPY','VIX'], ai:'SpotGamma 确认 GEX 转负，与我们系统信号一致。市场进入高波动阶段。' },
+  { id:8, src:'Reuters', srcColor:'#ff8800', srcBg:'#2a1a00', time:'48 min ago', headline:'China\'s commerce ministry says will "fight to the end" on any new US tariff measures', sentiment:'bear', tags:['SPY','FXI','Crude Oil'], ai:'中美贸易摩擦升级信号。风险资产普遍承压，原油受需求忧虑拖累。' },
+  { id:9, src:'@DeItaone', srcColor:'#1d9bf0', srcBg:'#0f3a5a', time:'1 hr ago', headline:'*NVIDIA CEO JENSEN HUANG TO SPEAK AT COMPUTEX 2026 KEYNOTE — MAY 20', sentiment:'bull', tags:['NVDA','SMH'], ai:'科技旗舰事件，NVDA 5月期权隐含波动率可能提前走高。' },
+  { id:10, src:'Bloomberg', srcColor:'#ff6600', srcBg:'#3a1a00', time:'1 hr ago', headline:'Treasury 10Y yield climbs to 4.58%, highest since February, as tariff concerns revive inflation fears', sentiment:'bear', tags:['TLT','SPY','GLD'], ai:'利率走高压制成长股估值，同时通胀预期抬升利好黄金。' },
+];
+
+/* ── Live news simulation ── */
+const LIVE_NEWS_POOL = [
+  { src:'@DeItaone', srcColor:'#1d9bf0', srcBg:'#0f3a5a', headline:'*TRUMP: "THE TARIFFS ARE WORKING, CHINA WILL NEGOTIATE" — TRUTH SOCIAL', sentiment:'neut', tags:['SPY','DXY'], isTrump:true },
+  { src:'Bloomberg', srcColor:'#ff6600', srcBg:'#3a1a00', headline:'SPY options put volume surges 180% above average in afternoon session', sentiment:'bear', tags:['SPY'] },
+  { src:'@unusual_whales', srcColor:'#9B6DFF', srcBg:'#1e1030', headline:'$QQQ seeing massive put buying: 12,000x $450P 5/2 sweep — bearish flow alert', sentiment:'bear', tags:['QQQ'] },
+  { src:'@SpotGamma', srcColor:'#00D4AA', srcBg:'#003a2a', headline:'Put Wall at 535 being tested — critical support for SPY into close', sentiment:'bear', tags:['SPY'] },
+];
+
+let liveNewsId = 100;
+
+/* ── Sidebar ── */
+const NAV=[
+  {id:'qa',label:'AI 问答'},
+  {id:'gex',label:'GEX Dashboard'},
+  {id:'sig',label:'信号中心',badge:'6',badgeRed:false},
+  {id:'news',label:'新闻流'},
+  {id:'strat',label:'策略评估'},
+  {id:'set',label:'设置'},
+];
+function SBIcon({id}){
+  if(id==='qa') return <svg className="nic" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M1 2h14v9H8l-4 3V11H1V2z"/></svg>;
+  if(id==='gex') return <svg className="nic" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><rect x="1" y="9" width="3" height="6" rx="1"/><rect x="6" y="5" width="3" height="10" rx="1"/><rect x="11" y="1" width="3" height="14" rx="1"/></svg>;
+  if(id==='sig') return <svg className="nic" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M8 1v2M8 13v2M1 8h2M13 8h2"/><circle cx="8" cy="8" r="2.5"/></svg>;
+  if(id==='news') return <svg className="nic" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><rect x="1" y="1" width="14" height="14" rx="2"/><path d="M4 5h8M4 8h8M4 11h5"/></svg>;
+  if(id==='strat') return <svg className="nic" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M2 14l5-5 3 3 6-8"/></svg>;
+  return <svg className="nic" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><circle cx="8" cy="8" r="2.2"/><path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15"/></svg>;
+}
+function Sidebar(){
+  const [active,setActive]=useState('sig');
+  return (
+    <div className="sb">
+      <div className="sb-logo"><div className="lm">OA</div><div><div style={{fontSize:15,fontWeight:600}}>OptionsAji</div><div style={{fontSize:10,color:'var(--muted)'}}>期权阿吉</div></div></div>
+      <div className="sb-nav">
+        {NAV.map(n=>(
+          <div key={n.id} className={`ni ${active===n.id?'on':''}`} onClick={()=>setActive(n.id)}>
+            <SBIcon id={n.id}/><span>{n.label}</span>
+            {n.badge&&<span className={`nb ${n.badgeRed?'red':''}`}>{n.badge}</span>}
+          </div>
+        ))}
+      </div>
+      <div className="sb-foot">
+        <div style={{display:'inline-flex',alignItems:'center',gap:5,background:'var(--gold-dim)',border:'1px solid var(--border)',padding:'3px 8px',borderRadius:5,fontSize:11,fontWeight:600,color:'var(--gold)',marginBottom:3}}>
+          <svg width="9" height="9" viewBox="0 0 10 10" fill="var(--gold)"><polygon points="5,0 6.5,3.5 10,4 7.5,6.5 8,10 5,8.5 2,10 2.5,6.5 0,4 3.5,3.5"/></svg>Pro Plan
+        </div>
+        <div style={{fontSize:10,color:'var(--muted)'}}>今日问答：12 / ∞ 次</div>
+      </div>
+      <div className="sb-user">
+        <div className="uav">张</div>
+        <div><div style={{fontSize:12.5,color:'var(--text)',fontWeight:500}}>张小明</div><div style={{fontSize:10,color:'var(--gold)'}}>Pro · 活跃至 12/31</div></div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Strength bar ── */
+function Strength({ level, urgent }) {
+  return (
+    <div className="sig-strength">
+      {[1,2,3,4,5].map(i=>(
+        <div key={i} className={`str-block ${i<=level?'on':'off'} ${urgent?'urgent':''}`}/>
+      ))}
+    </div>
+  );
+}
+
+/* ── Signal Card ── */
+function SignalCard({ sig, style }) {
+  const [expanded, setExpanded] = useState(true);
+  const isUrgent = sig.priority === 'urgent';
+  const isHigh = sig.priority === 'high';
+
+  return (
+    <div className={`sig-card ${sig.type} ${isUrgent?'priority-urgent':isHigh?'priority-high':''} sd`}
+      style={style} onClick={() => setExpanded(e=>!e)}>
+
+      {/* Top row */}
+      <div className="sig-top">
+        <span className={`sig-type-tag ${sig.type==='news'&&sig.isTrump?'news':sig.type}`}>
+          {sig.type==='gex'&&'⬡ GEX Alert'}
+          {sig.type==='flow'&&'◈ Flow Alert'}
+          {sig.type==='news'&&'◉ News Alert'}
+          {sig.type==='macro'&&'◎ Macro'}
+          {sig.type==='strategy'&&'◆ Strategy'}
+        </span>
+        {sig.isTrump && <span className="trump-badge">⚡ TRUMP</span>}
+        {isHigh && <span style={{fontSize:9,color:'var(--gold)',background:'rgba(212,175,55,.1)',border:'1px solid rgba(212,175,55,.2)',padding:'1px 6px',borderRadius:10}}>HIGH PRIORITY</span>}
+        {isUrgent && <span style={{fontSize:9,color:'var(--red)',background:'rgba(255,107,107,.1)',border:'1px solid rgba(255,107,107,.3)',padding:'1px 6px',borderRadius:10,fontWeight:700}}>URGENT</span>}
+        <span className="sig-time">{sig.time}</span>
+      </div>
+
+      {/* Title */}
+      <div className={`sig-title ${isUrgent?'urgent':''}`}>{sig.title}</div>
+
+      {/* Meta */}
+      <div className="sig-meta">
+        <div className="sig-meta-item"><span>标的</span>&nbsp;<strong style={{fontFamily:'var(--mono)'}}>{sig.ticker}</strong></div>
+        <div className="sig-meta-item">
+          <span>方向</span>&nbsp;
+          <span className={`sig-direction ${sig.direction}`}>
+            {sig.direction==='bull'&&'▲ Bullish'}
+            {sig.direction==='bear'&&'▼ Bearish'}
+            {sig.direction==='neut'&&'— Neutral'}
+          </span>
+        </div>
+        <div className="sig-meta-item"><span>强度</span>&nbsp;<Strength level={sig.strength} urgent={isUrgent}/>&nbsp;<span style={{fontFamily:'var(--mono)',fontSize:10}}>{sig.strength}/5</span></div>
+      </div>
+
+      {/* Flow bars (for flow type) */}
+      {sig.flowBars && expanded && (
+        <div className="flow-visual">
+          {sig.flowBars.map((h,i)=>(
+            <div key={i} className="flow-bar" style={{height:`${h}%`,background:`rgba(74,158,255,${0.3+h/200})`}}/>
+          ))}
+        </div>
+      )}
+
+      {/* Trump tweet */}
+      {sig.isTrump && expanded && (
+        <div style={{background:'rgba(29,155,240,.06)',border:'1px solid rgba(29,155,240,.2)',borderRadius:7,padding:'8px 10px',marginBottom:8}}>
+          <div style={{display:'flex',gap:8,alignItems:'flex-start'}}>
+            <div style={{width:22,height:22,borderRadius:'50%',background:'#1d9bf0',display:'flex',alignItems:'center',justifyContent:'center',fontSize:10,fontWeight:700,color:'white',flexShrink:0}}>T</div>
+            <div>
+              <div style={{display:'flex',gap:6,alignItems:'baseline'}}>
+                <span style={{fontSize:12,fontWeight:700,color:'var(--text)'}}>Donald J. Trump</span>
+                <span style={{fontSize:10,color:'var(--muted)'}}>@realDonaldTrump</span>
+              </div>
+              <div style={{fontSize:12,color:'var(--text)',margin:'4px 0',lineHeight:1.5}}>{sig.tweetText}</div>
+              <div style={{fontSize:10,color:'var(--muted)'}}>{sig.tweetTime}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Summary */}
+      {expanded && (
+        <div className={`sig-summary ${sig.summaryType}`}>{sig.summary}</div>
+      )}
+
+      {/* Actions */}
+      <div className="sig-actions" onClick={e=>e.stopPropagation()}>
+        <button className="sig-btn primary">详细分析 →</button>
+        <button className="sig-btn discord">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="var(--blue)"><path d="M8.5 1.5c-.7-.3-1.5-.5-2.3-.6l-.1.3c-.8-.1-1.6-.1-2.4 0L3.6.9C2.8 1 2 1.2 1.3 1.5 .3 3 .1 4.5.2 5.8c.9.6 1.8 1 2.7 1.3l.5-.7-.8-.3.5-.4.8.3c.3.1.7.1 1 0L5.7 6l.5.4-.8.3.5.7c.9-.3 1.8-.7 2.7-1.3.1-1.5-.2-3-.1-4.6z"/></svg>
+          推送 Discord
+        </button>
+        <button className="sig-btn">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.4"><path d="M5 1l1.2 2.5L9 4 7 6l.5 2.8L5 7.5l-2.5 1.3L3 6 1 4l2.8-.5L5 1z"/></svg>
+          收藏
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ── News Item ── */
+function NewsItem({ item, isNew }) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className={`news-item ${isNew?'sd':''}`} onClick={()=>setExpanded(e=>!e)}>
+      <div className="news-top">
+        <div className="src-icon" style={{background:item.srcBg,color:item.srcColor,border:`1px solid ${item.srcColor}33`}}>
+          {item.src[0]==='@'?'𝕏':'B'}
+        </div>
+        <span className="src-name" style={{color:item.srcColor,fontWeight:600,fontSize:11}}>{item.src}</span>
+        {item.isTrump&&<span className="trump-news-badge">TRUMP</span>}
+        <span className={`news-sentiment ${item.sentiment}`}>
+          {item.sentiment==='bull'&&'● 看涨'}
+          {item.sentiment==='bear'&&'● 看跌'}
+          {item.sentiment==='neut'&&'● 中性'}
+        </span>
+        <span className="news-time">{item.time}</span>
+      </div>
+      <div className="news-headline">{item.headline}</div>
+      <div className="news-tags">
+        {item.tags.map(t=><span key={t} className="news-tag">{t}</span>)}
+      </div>
+      {expanded && item.ai && (
+        <div className="news-expand">
+          <span style={{color:'var(--gold)',fontSize:10,fontWeight:600,display:'block',marginBottom:3}}>AI 解读</span>
+          {item.ai}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Tweaks ── */
+function TweaksWrapper(){
+  const [tweaks,setTweak]=useTweaks(/*EDITMODE-BEGIN*/{
+    "accentColor": "#D4AF37",
+    "liveUpdates": true,
+    "updateIntervalSec": 10
+  }/*EDITMODE-END*/);
+  useEffect(()=>{
+    document.documentElement.style.setProperty('--gold',tweaks.accentColor);
+    document.documentElement.style.setProperty('--gold-dim',tweaks.accentColor+'1a');
+    document.documentElement.style.setProperty('--border',tweaks.accentColor+'26');
+  },[tweaks]);
+  return (
+    <TweaksPanel>
+      <TweakSection title="品牌色">
+        <TweakColor label="强调色" value={tweaks.accentColor} onChange={v=>setTweak('accentColor',v)}/>
+      </TweakSection>
+      <TweakSection title="实时更新">
+        <TweakToggle label="启用实时新闻" value={tweaks.liveUpdates} onChange={v=>setTweak('liveUpdates',v)}/>
+        <TweakSlider label="更新间隔（秒）" value={tweaks.updateIntervalSec} min={5} max={30} step={1} onChange={v=>setTweak('updateIntervalSec',v)}/>
+      </TweakSection>
+    </TweaksPanel>
+  );
+}
+
+/* ── Main App ── */
+function App() {
+  const [sigFilter, setSigFilter] = useState({ ticker:'all', type:'all', priority:'all', time:'live' });
+  const [newsTab, setNewsTab] = useState('all');
+  const [signals] = useState(INITIAL_SIGNALS);
+  const [news, setNews] = useState(INITIAL_NEWS);
+  const [newNewsIds, setNewNewsIds] = useState(new Set());
+  const [liveCount, setLiveCount] = useState(0);
+  const poolIdx = useRef(0);
+
+  // Simulate live news arriving
+  useEffect(() => {
+    const id = setInterval(() => {
+      const item = LIVE_NEWS_POOL[poolIdx.current % LIVE_NEWS_POOL.length];
+      poolIdx.current++;
+      const newItem = { ...item, id: liveNewsId++, time: 'just now' };
+      setNews(prev => [newItem, ...prev.slice(0,14)]);
+      setNewNewsIds(s => new Set([...s, newItem.id]));
+      setLiveCount(c => c+1);
+      setTimeout(() => setNewNewsIds(s => { const n=new Set(s); n.delete(newItem.id); return n; }), 2000);
+    }, 14000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Filter signals
+  const filteredSigs = signals.filter(s => {
+    if (sigFilter.ticker !== 'all' && s.ticker !== sigFilter.ticker) return false;
+    if (sigFilter.type !== 'all' && s.type !== sigFilter.type) return false;
+    if (sigFilter.priority !== 'all' && s.priority !== sigFilter.priority) return false;
+    return true;
+  });
+
+  // Filter news
+  const filteredNews = news.filter(n => {
+    if (newsTab === 'bloomberg') return n.src === 'Bloomberg' || n.src === 'Reuters';
+    if (newsTab === 'twitter') return n.src.startsWith('@');
+    if (newsTab === 'macro') return n.tags.some(t => ['DXY','TLT','GLD','Crude Oil','VIX'].includes(t));
+    return true;
+  });
+
+  return (
+    <div className="shell">
+      <Sidebar/>
+      <div className="main">
+        {/* Filter bar */}
+        <div className="filterbar">
+          <div className="filter-group">
+            <span className="filter-label">标的</span>
+            <div className="filter-tabs">
+              {['all','SPY','QQQ','Watchlist'].map(t=>(
+                <div key={t} className={`ftab ${sigFilter.ticker===t?'on':''}`}
+                  onClick={()=>setSigFilter(f=>({...f,ticker:t}))}>
+                  {t==='all'?'All':t}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="filter-group">
+            <span className="filter-label">类型</span>
+            <div className="filter-tabs">
+              {[{v:'all',l:'All'},{v:'gex',l:'GEX'},{v:'flow',l:'Flow'},{v:'news',l:'News'},{v:'strategy',l:'Strategy'}].map(t=>(
+                <div key={t.v} className={`ftab ${sigFilter.type===t.v?'on':''}`}
+                  onClick={()=>setSigFilter(f=>({...f,type:t.v}))}>{t.l}</div>
+              ))}
+            </div>
+          </div>
+          <div className="filter-group">
+            <span className="filter-label">优先级</span>
+            <div className="filter-tabs">
+              {[{v:'all',l:'All'},{v:'urgent',l:'紧急'},{v:'high',l:'高'},{v:'medium',l:'中'},{v:'low',l:'低'}].map(t=>(
+                <div key={t.v} className={`ftab ${sigFilter.priority===t.v?'on':''}`}
+                  onClick={()=>setSigFilter(f=>({...f,priority:t.v}))}>{t.l}</div>
+              ))}
+            </div>
+          </div>
+          <div className="fbar-right">
+            {liveCount > 0 && (
+              <span style={{fontSize:11,color:'var(--green)',fontFamily:'var(--mono)'}}>+{liveCount} 新消息</span>
+            )}
+            <div className="live-chip"><div className="live-dot"/>实时更新中</div>
+          </div>
+        </div>
+
+        {/* Two columns */}
+        <div className="cols">
+          {/* Signal feed */}
+          <div className="col col-left">
+            <div className="col-header">
+              <div className="col-title">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="var(--gold)" strokeWidth="1.5"><path d="M6 1v2M6 9v2M1 6h2M9 6h2"/><circle cx="6" cy="6" r="2"/></svg>
+                信号 Feed
+                <span className="col-count">{filteredSigs.length} 条</span>
+              </div>
+              <div style={{fontSize:11,color:'var(--muted)'}}>点击卡片展开/折叠</div>
+            </div>
+            <div className="col-scroll">
+              {filteredSigs.map((sig, i) => (
+                <SignalCard key={sig.id} sig={sig} style={{animationDelay:`${i*0.06}s`}}/>
+              ))}
+              {filteredSigs.length === 0 && (
+                <div style={{textAlign:'center',padding:'40px 20px',color:'var(--muted)',fontSize:13}}>
+                  没有符合条件的信号
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* News feed */}
+          <div className="col">
+            <div className="col-header" style={{flexDirection:'column',alignItems:'flex-start',gap:8}}>
+              <div className="col-title" style={{width:'100%',justifyContent:'space-between'}}>
+                <div style={{display:'flex',alignItems:'center',gap:6}}>
+                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><rect x="1" y="1" width="10" height="10" rx="1.5"/><path d="M3 4h6M3 6h6M3 8h4"/></svg>
+                  实时新闻流
+                  <span className="col-count">{filteredNews.length} 条</span>
+                </div>
+                <div className="live-chip"><div className="live-dot"/>LIVE</div>
+              </div>
+              <div className="news-source-tabs" style={{padding:0}}>
+                {[{v:'all',l:'All'},{v:'bloomberg',l:'Bloomberg'},{v:'twitter',l:'X/Twitter'},{v:'macro',l:'Macro'}].map(t=>(
+                  <div key={t.v} className={`nstab ${newsTab===t.v?'on':''}`} onClick={()=>setNewsTab(t.v)}>{t.l}</div>
+                ))}
+              </div>
+            </div>
+            <div className="col-scroll">
+              {filteredNews.map(item => (
+                <NewsItem key={item.id} item={item} isNew={newNewsIds.has(item.id)}/>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+      <TweaksWrapper/>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OptionsAji — Wireframe Explorations</title>
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script type="text/babel" src="design-canvas.jsx"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1a1a1a; font-family: 'Caveat', cursive; }
+
+  /* Wireframe sketch style */
+  .wf { font-family: 'Caveat', cursive; }
+  .wf-box {
+    border: 2px solid #555;
+    background: #2a2a2a;
+    border-radius: 3px;
+  }
+  .wf-box.dark { background: #1e1e1e; border-color: #444; }
+  .wf-box.accent { background: #2d2a1a; border-color: #8a7a30; }
+  .wf-box.gold { background: #8a7a30; border: none; }
+  .wf-box.green { background: #1a3a30; border-color: #2a6a55; }
+  .wf-box.muted { background: #252525; border-color: #3a3a3a; }
+  .wf-label {
+    font-family: 'Caveat', cursive;
+    color: #888;
+    font-size: 11px;
+  }
+  .wf-title {
+    font-family: 'Caveat', cursive;
+    color: #ccc;
+    font-weight: 700;
+  }
+  .wf-gold { color: #c9a93a; }
+  .wf-green { color: #3abf9a; }
+  .wf-muted { color: #666; }
+  .wf-text { color: #aaa; font-size: 13px; }
+  .wf-tag {
+    display: inline-block;
+    background: #333;
+    border: 1px solid #555;
+    border-radius: 2px;
+    padding: 1px 5px;
+    font-size: 10px;
+    color: #888;
+  }
+  .sketch-line {
+    border: none;
+    border-top: 1.5px solid #444;
+    margin: 6px 0;
+  }
+  .wf-nav { display: flex; align-items: center; gap: 8px; }
+  .wf-btn {
+    display: inline-block;
+    padding: 5px 12px;
+    border-radius: 3px;
+    font-family: 'Caveat', cursive;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: default;
+  }
+  .wf-btn.primary { background: #8a7a30; color: #fff; border: none; }
+  .wf-btn.outline { background: transparent; color: #888; border: 1.5px solid #555; }
+  .wf-chat-bubble {
+    border-radius: 8px 8px 8px 2px;
+    padding: 5px 8px;
+    font-size: 11px;
+    max-width: 80%;
+  }
+  .wf-chat-bubble.user {
+    background: #2a2a3a;
+    border: 1px solid #444;
+    color: #aaa;
+    border-radius: 8px 8px 2px 8px;
+    margin-left: auto;
+  }
+  .wf-chat-bubble.ai {
+    background: #1e2e28;
+    border: 1px solid #2a5a45;
+    color: #6abf9a;
+  }
+  .bar {
+    display: flex; align-items: flex-end; gap: 2px;
+  }
+  .bar-col { width: 8px; background: #3a3a3a; border-radius: 1px 1px 0 0; }
+  .bar-col.pos { background: #2a6a55; }
+  .bar-col.neg { background: #6a2a2a; }
+  .zigzag { font-size: 9px; color: #555; letter-spacing: -1px; }
+  
+  /* annotation arrow style */
+  .ann {
+    font-size: 11px;
+    color: #666;
+    font-style: italic;
+    font-family: 'Caveat', cursive;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+/* ─── Direction A: Terminal-First ─── */
+function WireA() {
+  return (
+    <div className="wf" style={{width: 720, fontSize: 13, color: '#aaa'}}>
+      {/* Nav */}
+      <div className="wf-box dark" style={{padding: '8px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2}}>
+        <div className="wf-nav">
+          <span className="wf-title" style={{fontSize: 15}}>◈ OptionsAji</span>
+          <span className="wf-muted" style={{fontSize: 11}}>期权阿吉</span>
+        </div>
+        <div className="wf-nav">
+          {['功能','定价','文档','博客'].map(t => <span key={t} className="wf-label" style={{marginRight:8}}>{t}</span>)}
+          <span className="wf-btn outline" style={{fontSize:11}}>登录</span>
+          <span className="wf-btn primary" style={{fontSize:11, marginLeft:4}}>免费开始</span>
+        </div>
+      </div>
+
+      {/* Hero — full-width terminal grid */}
+      <div className="wf-box dark" style={{padding: '0', overflow:'hidden', marginBottom:2}}>
+        {/* Terminal header bar */}
+        <div style={{background:'#141414', borderBottom:'1px solid #333', padding:'6px 14px', display:'flex', gap:12, alignItems:'center'}}>
+          <span className="wf-gold" style={{fontSize:10, fontFamily:'Space Mono,monospace'}}>●</span>
+          <span className="wf-label" style={{fontFamily:'Space Mono,monospace', fontSize:9}}>OPTIONSAJI TERMINAL v1.0</span>
+          <span style={{marginLeft:'auto'}} className="wf-green wf-label">● LIVE</span>
+        </div>
+        {/* Grid: left headline, right dashboard mock */}
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:0}}>
+          {/* Left */}
+          <div style={{padding:'24px 20px', borderRight:'1px solid #2a2a2a'}}>
+            <div className="wf-tag" style={{marginBottom:8}}>NEW — GEX 2.0 Engine</div>
+            <div className="wf-title" style={{fontSize:26, lineHeight:1.2, marginBottom:6}}>
+              AI 驱动的<br/>
+              <span className="wf-gold">美股期权</span><br/>
+              决策引擎
+            </div>
+            <div style={{fontSize:11, color:'#666', marginBottom:4, fontFamily:'Space Mono,monospace'}}>
+              Real-time GEX · AI Q&A · Smart Signals
+            </div>
+            <div className="sketch-line"/>
+            <div className="wf-text" style={{fontSize:12, marginBottom:16}}>
+              实时 GEX 分析 + AI 期权问答 + 新闻情绪监控<br/>一个平台搞定
+            </div>
+            <div style={{display:'flex', gap:8, marginBottom:12}}>
+              <span className="wf-btn primary">免费开始 / Start Free</span>
+              <span className="wf-btn outline">查看 Demo</span>
+            </div>
+            {/* Trust badges */}
+            <div style={{display:'flex', gap:16, marginTop:8}}>
+              {['1,000+ 交易者','7天免费试用','无需信用卡'].map(t => (
+                <span key={t} style={{fontSize:10, color:'#555'}}><span className="wf-green">✓</span> {t}</span>
+              ))}
+            </div>
+          </div>
+          {/* Right — dashboard preview grid */}
+          <div style={{padding:'12px', background:'#161616', display:'grid', gridTemplateRows:'auto auto', gap:6}}>
+            {/* GEX chart mini */}
+            <div className="wf-box" style={{padding:'8px', height:90}}>
+              <div className="wf-label" style={{marginBottom:4}}>GEX Chart — SPY</div>
+              <div style={{display:'flex', alignItems:'flex-end', gap:3, height:55}}>
+                {[30,50,70,40,85,60,45,20,35,55,90,65,30,50,40,20,60,35,25,45].map((h,i) => (
+                  <div key={i} className={`bar-col ${h>50?'pos':'neg'}`} style={{height:`${h}%`, flex:1}}/>
+                ))}
+              </div>
+              <div style={{display:'flex', justifyContent:'space-between', marginTop:3}}>
+                <span className="ann">Put Wall 535</span>
+                <span className="wf-gold ann">γ Flip 545</span>
+                <span className="ann">Call Wall 560</span>
+              </div>
+            </div>
+            {/* AI Chat mini */}
+            <div className="wf-box" style={{padding:'8px'}}>
+              <div className="wf-label" style={{marginBottom:6}}>AI 问答</div>
+              <div style={{display:'flex', flexDirection:'column', gap:5}}>
+                <div className="wf-chat-bubble user">SPY 现在适合做 Iron Condor 吗？</div>
+                <div className="wf-chat-bubble ai">当前 SPY GEX +2.1B，属于 Positive Gamma 状态，做市商倾向于压制波动，适合 Iron Condor...</div>
+              </div>
+            </div>
+            {/* Live tickers */}
+            <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:4}}>
+              {[
+                {sym:'SPY', p:'548.32', ch:'+0.8%', g:'+2.1B', pos:true},
+                {sym:'QQQ', p:'472.15', ch:'-0.3%', g:'-800M', pos:false},
+              ].map(t => (
+                <div key={t.sym} className="wf-box muted" style={{padding:'5px 8px'}}>
+                  <div style={{display:'flex', justifyContent:'space-between'}}>
+                    <span className="wf-title" style={{fontSize:13}}>{t.sym}</span>
+                    <span style={{fontSize:10, color: t.pos?'#3abf9a':'#bf5a5a'}}>{t.ch}</span>
+                  </div>
+                  <div className="wf-gold" style={{fontSize:14, fontFamily:'Space Mono,monospace'}}>${t.p}</div>
+                  <div style={{fontSize:9, color:'#555'}}>GEX: <span style={{color: t.pos?'#3abf9a':'#bf5a5a'}}>{t.g}</span></div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Data bar */}
+      <div className="wf-box" style={{padding:'6px 14px', marginBottom:2, display:'flex', gap:0, overflowX:'hidden', background:'#111'}}>
+        <span className="wf-label" style={{fontFamily:'Space Mono,monospace', fontSize:10, letterSpacing:0}}>
+          <span className="wf-gold">SPY</span> $548.32 <span style={{color:'#3abf9a'}}>▲0.8%</span> | GEX: +2.1B &nbsp;·&nbsp;
+          <span className="wf-gold">QQQ</span> $472.15 <span style={{color:'#bf5a5a'}}>▼0.3%</span> | GEX: -800M &nbsp;·&nbsp;
+          VIX 18.5 | Put Wall: 540 | Call Wall: 555 &nbsp;·&nbsp;
+          <span className="wf-gold">NVDA</span> $875.20 <span style={{color:'#3abf9a'}}>▲1.2%</span>
+        </span>
+      </div>
+
+      {/* Features row */}
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:2, marginBottom:2}}>
+        {[
+          {icon:'[ AI ]', title:'AI 期权问答', sub:'用中文问任何期权问题', preview:'chat'},
+          {icon:'[GEX]', title:'实时 GEX 仪表盘', sub:'做市商对冲压力可视化', preview:'chart'},
+          {icon:'[SIG]', title:'智能信号推送', sub:'Discord / Telegram 实时推送', preview:'notif'},
+        ].map((f,i) => (
+          <div key={i} className="wf-box" style={{padding:'12px'}}>
+            <div style={{fontFamily:'Space Mono,monospace', fontSize:10, color:'#c9a93a', marginBottom:6}}>{f.icon}</div>
+            <div className="wf-title" style={{fontSize:14, marginBottom:4}}>{f.title}</div>
+            <div className="wf-text" style={{fontSize:11, marginBottom:8}}>{f.sub}</div>
+            <div className="wf-box muted" style={{height:50, display:'flex', alignItems:'center', justifyContent:'center'}}>
+              <span className="wf-label">[{f.preview} preview]</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Pricing row */}
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:2, marginBottom:2}}>
+        {[
+          {plan:'Free', price:'$0', color:'#444', border:'#444'},
+          {plan:'Pro', price:'$49/mo', color:'#2a2218', border:'#8a7a30', badge:'推荐'},
+          {plan:'Alpha', price:'$149/mo', color:'#1e1e2e', border:'#3a3a6a'},
+        ].map((p,i) => (
+          <div key={i} style={{padding:'12px', background:p.color, border:`2px solid ${p.border}`, borderRadius:3}}>
+            {p.badge && <span className="wf-tag" style={{background:'#8a7a30', color:'#fff', marginBottom:6, display:'inline-block'}}>{p.badge}</span>}
+            <div className="wf-title" style={{fontSize:15}}>{p.plan}</div>
+            <div className="wf-gold" style={{fontSize:20, fontFamily:'Space Mono,monospace'}}>{p.price}</div>
+            <div className="sketch-line"/>
+            <div className="wf-label">功能列表占位</div>
+            <div className="wf-label" style={{marginTop:3}}>功能列表占位</div>
+            <div className="wf-label" style={{marginTop:3}}>功能列表占位</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Footer note */}
+      <div className="ann" style={{textAlign:'center', padding:'8px', color:'#444'}}>
+        → Direction A: Terminal-First — dense data grid, Bloomberg aesthetic, dashboard-in-hero
+      </div>
+    </div>
+  );
+}
+
+/* ─── Direction B: Cinematic SaaS ─── */
+function WireB() {
+  return (
+    <div className="wf" style={{width: 720, fontSize: 13, color: '#aaa'}}>
+      {/* Nav — minimal floating */}
+      <div style={{padding: '10px 24px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #2a2a2a', marginBottom:2}}>
+        <div style={{display:'flex', alignItems:'center', gap:8}}>
+          <div style={{width:24, height:24, border:'2px solid #8a7a30', borderRadius:4, display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <span className="wf-gold" style={{fontSize:10}}>◈</span>
+          </div>
+          <span className="wf-title" style={{fontSize:14}}>OptionsAji</span>
+        </div>
+        <div style={{display:'flex', gap:20, alignItems:'center'}}>
+          {['Product','Pricing','Docs'].map(t => <span key={t} className="wf-muted" style={{fontSize:12}}>{t}</span>)}
+          <span className="wf-btn primary" style={{fontSize:11}}>免费开始 →</span>
+        </div>
+      </div>
+
+      {/* Hero — big centered text, background effect strip */}
+      <div className="wf-box dark" style={{padding:'40px 40px 28px', textAlign:'center', marginBottom:2, position:'relative', overflow:'hidden', background:'#131313'}}>
+        {/* BG matrix strip */}
+        <div style={{position:'absolute', top:0, left:0, right:0, bottom:0, display:'flex', flexWrap:'wrap', overflow:'hidden', opacity:0.07, gap:6, padding:8, pointerEvents:'none'}}>
+          {Array.from({length:80}).map((_,i) => (
+            <span key={i} style={{fontSize:8, fontFamily:'Space Mono,monospace', color:'#c9a93a', whiteSpace:'nowrap'}}>
+              {['SPY 545C 0.32Δ','QQQ 470P -0.28Δ','GEX +2.1B','VIX 18.5','NVDA 880C'][i%5]}
+            </span>
+          ))}
+        </div>
+        <div style={{position:'relative'}}>
+          <div style={{display:'inline-block', border:'1px solid #3a3a3a', borderRadius:20, padding:'3px 12px', marginBottom:16}}>
+            <span className="wf-gold" style={{fontSize:10}}>✦ AI-Powered · Real-time GEX · Smart Signals</span>
+          </div>
+          <div className="wf-title" style={{fontSize:40, lineHeight:1.1, marginBottom:8}}>
+            AI 驱动的美股<br/>
+            <span className="wf-gold">期权决策引擎</span>
+          </div>
+          <div style={{fontSize:12, color:'#666', fontFamily:'Space Mono,monospace', marginBottom:16}}>
+            Real-time GEX · AI Q&A · Smart Signals
+          </div>
+          <div className="wf-text" style={{maxWidth:420, margin:'0 auto 24px', fontSize:14}}>
+            实时 GEX 分析 + AI 期权问答 + 新闻情绪监控，一个平台搞定
+          </div>
+          <div style={{display:'flex', gap:12, justifyContent:'center', marginBottom:24}}>
+            <span className="wf-btn primary" style={{fontSize:14, padding:'8px 24px'}}>免费开始 / Start Free</span>
+            <span className="wf-btn outline" style={{fontSize:14, padding:'8px 24px'}}>▶ 查看 Demo</span>
+          </div>
+          {/* Dashboard preview — centered large card */}
+          <div className="wf-box" style={{maxWidth:540, margin:'0 auto', padding:'12px', background:'#1a1a1a'}}>
+            <div style={{display:'grid', gridTemplateColumns:'1.4fr 1fr', gap:8}}>
+              <div className="wf-box muted" style={{height:100}}>
+                <div className="wf-label" style={{padding:6}}>GEX 柱状图</div>
+                <div style={{display:'flex', alignItems:'flex-end', gap:2, height:65, padding:'0 6px'}}>
+                  {[40,60,80,50,95,70,45,30,55,75,90,60,35,55,45].map((h,i) => (
+                    <div key={i} className={`bar-col ${h>50?'pos':'neg'}`} style={{height:`${h}%`, flex:1}}/>
+                  ))}
+                </div>
+              </div>
+              <div className="wf-box muted" style={{height:100, padding:'6px', display:'flex', flexDirection:'column', gap:4}}>
+                <div className="wf-label">AI 问答</div>
+                <div className="wf-chat-bubble user" style={{fontSize:10}}>适合做 Iron Condor？</div>
+                <div className="wf-chat-bubble ai" style={{fontSize:10}}>当前 GEX 正值，适合...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Marquee bar */}
+      <div style={{background:'#0d0d0d', borderTop:'1px solid #2a2a2a', borderBottom:'1px solid #2a2a2a', padding:'7px 0', marginBottom:2, overflow:'hidden'}}>
+        <div style={{display:'flex', gap:32, paddingLeft:16, fontSize:11, fontFamily:'Space Mono,monospace'}}>
+          <span><span className="wf-gold">SPY</span> <span style={{color:'#eee'}}>$548.32</span> <span style={{color:'#3abf9a'}}>▲0.8%</span> | GEX <span className="wf-gold">+2.1B</span></span>
+          <span><span className="wf-gold">QQQ</span> <span style={{color:'#eee'}}>$472.15</span> <span style={{color:'#bf5a5a'}}>▼0.3%</span> | GEX <span style={{color:'#bf5a5a'}}>-800M</span></span>
+          <span>VIX <span className="wf-gold">18.5</span> | Put Wall <span style={{color:'#bf5a5a'}}>540</span> | Call Wall <span style={{color:'#3abf9a'}}>555</span></span>
+        </div>
+      </div>
+
+      {/* Features — alternating L/R layout */}
+      {[
+        {n:'01', title:'AI 期权问答', sub:'用中文问任何期权问题，秒获专业分析', side:'left'},
+        {n:'02', title:'实时 GEX 仪表盘', sub:'做市商在什么价位被迫对冲？一眼看清', side:'right'},
+        {n:'03', title:'智能信号推送', sub:'Discord / Telegram 实时推送重要信号', side:'left'},
+      ].map((f,i) => (
+        <div key={i} style={{display:'grid', gridTemplateColumns: f.side==='right' ? '1fr 1.2fr' : '1.2fr 1fr', gap:2, marginBottom:2}}>
+          {f.side === 'right' && <div className="wf-box muted" style={{height:80, display:'flex', alignItems:'center', justifyContent:'center'}}><span className="wf-label">[feature visual]</span></div>}
+          <div className="wf-box dark" style={{padding:'16px 20px'}}>
+            <div style={{fontFamily:'Space Mono,monospace', fontSize:10, color:'#555', marginBottom:4}}>{f.n}</div>
+            <div className="wf-title" style={{fontSize:16, marginBottom:4}}>{f.title}</div>
+            <div className="wf-text" style={{fontSize:12}}>{f.sub}</div>
+          </div>
+          {f.side === 'left' && <div className="wf-box muted" style={{height:80, display:'flex', alignItems:'center', justifyContent:'center'}}><span className="wf-label">[feature visual]</span></div>}
+        </div>
+      ))}
+
+      {/* Pricing — clean cards */}
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:8, padding:'16px', background:'#111', marginBottom:2}}>
+        {[
+          {plan:'Free', price:'$0', highlight:false},
+          {plan:'Pro', price:'$49/mo', badge:'★ 推荐', highlight:true},
+          {plan:'Alpha', price:'$149/mo', highlight:false},
+        ].map((p,i) => (
+          <div key={i} style={{padding:'14px', border: p.highlight ? '2px solid #8a7a30' : '2px solid #2a2a2a', borderRadius:4, background: p.highlight ? '#1e1a0e' : '#1a1a1a'}}>
+            {p.badge && <div style={{fontSize:10, color:'#c9a93a', marginBottom:4}}>{p.badge}</div>}
+            <div className="wf-title" style={{fontSize:18}}>{p.plan}</div>
+            <div className="wf-gold" style={{fontSize:22, fontFamily:'Space Mono,monospace', marginBottom:8}}>{p.price}</div>
+            {[1,2,3].map(j => <div key={j} style={{height:8, background:'#2a2a2a', borderRadius:2, marginBottom:5}}/>)}
+            <div className="wf-btn primary" style={{display:'block', textAlign:'center', marginTop:10, fontSize:12}}>
+              {p.highlight ? '开始 Pro 试用' : '注册'}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="ann" style={{textAlign:'center', padding:'8px', color:'#444'}}>
+        → Direction B: Cinematic SaaS — large centered hero, matrix BG effect, alternating feature layout
+      </div>
+    </div>
+  );
+}
+
+/* ─── Direction C: Split-Screen Asymmetric ─── */
+function WireC() {
+  return (
+    <div className="wf" style={{width: 720, fontSize: 13, color: '#aaa'}}>
+      {/* Sticky nav */}
+      <div style={{padding: '8px 16px', display:'flex', alignItems:'center', justifyContent:'space-between', borderBottom:'1px solid #222', marginBottom:2}}>
+        <span className="wf-title wf-gold" style={{fontSize:16}}>◈ AJI</span>
+        <div style={{display:'flex', gap:16, alignItems:'center', fontSize:11}}>
+          <span className="wf-label">功能</span><span className="wf-label">定价</span><span className="wf-label">社区</span>
+          <span className="wf-btn outline" style={{fontSize:10}}>Login</span>
+          <span className="wf-btn primary" style={{fontSize:10}}>Start Free</span>
+        </div>
+      </div>
+
+      {/* Hero — bold split, 40/60 */}
+      <div style={{display:'grid', gridTemplateColumns:'2fr 3fr', gap:0, height:260, marginBottom:2}}>
+        {/* Left — copy only, full height */}
+        <div style={{background:'#0d0d0d', padding:'24px 20px', display:'flex', flexDirection:'column', justifyContent:'center', borderRight:'1px solid #1a1a1a'}}>
+          <div style={{width:40, height:2, background:'#8a7a30', marginBottom:12}}/>
+          <div className="wf-title" style={{fontSize:28, lineHeight:1.15, marginBottom:12}}>
+            AI 驱动<br/>
+            <span className="wf-gold">期权</span><br/>
+            决策引擎
+          </div>
+          <div className="wf-text" style={{fontSize:11, marginBottom:16, lineHeight:1.6}}>
+            实时 GEX · AI Q&A<br/>新闻情绪 · 智能信号
+          </div>
+          <div style={{display:'flex', flexDirection:'column', gap:6}}>
+            <span className="wf-btn primary" style={{textAlign:'center', fontSize:13}}>免费开始</span>
+            <span className="wf-btn outline" style={{textAlign:'center', fontSize:13}}>查看 Demo ▶</span>
+          </div>
+        </div>
+        {/* Right — live dashboard fills the space */}
+        <div style={{background:'#111', padding:'12px', display:'grid', gridTemplateRows:'1fr 1fr', gap:6}}>
+          {/* Top row — GEX + tickers */}
+          <div style={{display:'grid', gridTemplateColumns:'1.8fr 1fr', gap:6}}>
+            <div className="wf-box" style={{padding:'8px'}}>
+              <div style={{display:'flex', justifyContent:'space-between', marginBottom:4, alignItems:'center'}}>
+                <span className="wf-label">SPY GEX Exposure</span>
+                <span className="wf-green" style={{fontSize:9}}>● LIVE</span>
+              </div>
+              <div style={{display:'flex', alignItems:'flex-end', gap:2, height:55}}>
+                {[25,45,70,50,90,65,40,20,55,80,95,60,30,50,35].map((h,i) => (
+                  <div key={i} className={`bar-col ${h>50?'pos':'neg'}`} style={{height:`${h}%`, flex:1}}/>
+                ))}
+              </div>
+              <div style={{display:'flex', justifyContent:'space-between', marginTop:3}}>
+                <span className="ann" style={{fontSize:9}}>Put 535</span>
+                <span style={{fontSize:9, color:'#c9a93a'}}>γ Flip 545</span>
+                <span className="ann" style={{fontSize:9}}>Call 560</span>
+              </div>
+            </div>
+            <div style={{display:'flex', flexDirection:'column', gap:4}}>
+              {[
+                {sym:'SPY',p:'548.32',ch:'+0.8%',pos:true},
+                {sym:'QQQ',p:'472.15',ch:'-0.3%',pos:false},
+                {sym:'VIX',p:'18.50',ch:'+2.1%',pos:false},
+              ].map(t => (
+                <div key={t.sym} className="wf-box muted" style={{padding:'5px 7px', flex:1}}>
+                  <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                    <span style={{fontSize:11, color:'#ccc', fontWeight:700}}>{t.sym}</span>
+                    <span style={{fontSize:9, color: t.pos?'#3abf9a':'#bf5a5a'}}>{t.ch}</span>
+                  </div>
+                  <div className="wf-gold" style={{fontSize:12, fontFamily:'Space Mono,monospace'}}>{t.p}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          {/* Bottom row — AI Chat */}
+          <div className="wf-box" style={{padding:'8px', display:'flex', flexDirection:'column', gap:5}}>
+            <div className="wf-label">AI 期权助手</div>
+            <div className="wf-chat-bubble user">SPY 现在适合做 Iron Condor 吗？</div>
+            <div className="wf-chat-bubble ai">当前 SPY GEX +2.1B (Positive Gamma)，价格被压制在 535–560 区间，Iron Condor 风险回报较优...</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Data ticker */}
+      <div style={{background:'#0a0a0a', padding:'5px 12px', fontSize:10, fontFamily:'Space Mono,monospace', color:'#555', borderTop:'1px solid #1a1a1a', borderBottom:'1px solid #1a1a1a', marginBottom:2}}>
+        <span className="wf-gold">SPY</span> $548.32 <span style={{color:'#3abf9a'}}>▲0.8%</span> &nbsp;|&nbsp; GEX: <span style={{color:'#3abf9a'}}>+2.1B ↑ Positive γ</span> &nbsp;|&nbsp; <span className="wf-gold">QQQ</span> $472.15 <span style={{color:'#bf5a5a'}}>▼0.3%</span> &nbsp;|&nbsp; VIX 18.5 &nbsp;|&nbsp; Put Wall: 540 &nbsp;|&nbsp; Call Wall: 555
+      </div>
+
+      {/* Features — tab-style with big preview */}
+      <div style={{display:'grid', gridTemplateColumns:'180px 1fr', gap:2, marginBottom:2}}>
+        <div style={{background:'#0d0d0d', padding:'12px 0'}}>
+          {['AI 期权问答','实时 GEX 仪表盘','智能信号推送'].map((f,i) => (
+            <div key={i} style={{padding:'10px 14px', borderLeft: i===0 ? '3px solid #c9a93a' : '3px solid transparent', background: i===0 ? '#1a1708' : 'transparent', marginBottom:2}}>
+              <div className={`wf-title ${i===0?'wf-gold':''}`} style={{fontSize:12}}>{f}</div>
+              <div className="wf-label" style={{fontSize:10, marginTop:2}}>功能说明简介...</div>
+            </div>
+          ))}
+        </div>
+        <div className="wf-box muted" style={{height:120, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <span className="wf-label">[AI 问答界面大图预览]</span>
+        </div>
+      </div>
+
+      {/* Pricing + Social in 2 cols */}
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap:2, marginBottom:2}}>
+        {/* Social */}
+        <div className="wf-box dark" style={{padding:'12px'}}>
+          <div className="wf-title" style={{fontSize:13, marginBottom:8}}>1,000+ 华语交易者的选择</div>
+          {['GEX 数据让我终于看懂了做市商行为', '信号推送帮我避开了 FOMC 的大跌'].map((q,i) => (
+            <div key={i} className="wf-box muted" style={{padding:'7px', marginBottom:5, fontSize:11, color:'#888'}}>
+              {q}
+              <div style={{fontSize:10, color:'#555', marginTop:3}}>— 用户评价 {i+1}</div>
+            </div>
+          ))}
+        </div>
+        {/* Pricing cards stacked */}
+        <div style={{display:'flex', flexDirection:'column', gap:4, padding:8, background:'#111'}}>
+          {[
+            {plan:'Free', price:'$0', note:'3次AI问答/天'},
+            {plan:'Pro ★', price:'$49/mo', note:'无限问答 + 实时GEX', gold:true},
+            {plan:'Alpha', price:'$149/mo', note:'全功能 + 1v1'},
+          ].map(p => (
+            <div key={p.plan} style={{display:'flex', alignItems:'center', justifyContent:'space-between', padding:'8px 10px', border: p.gold?'1.5px solid #8a7a30':'1px solid #2a2a2a', borderRadius:3, background: p.gold?'#1a1708':'#151515'}}>
+              <div>
+                <span className={`wf-title ${p.gold?'wf-gold':''}`} style={{fontSize:13}}>{p.plan}</span>
+                <div className="wf-label" style={{fontSize:10}}>{p.note}</div>
+              </div>
+              <div className="wf-gold" style={{fontSize:14, fontFamily:'Space Mono,monospace'}}>{p.price}</div>
+            </div>
+          ))}
+          <div style={{fontSize:10, color:'#555', textAlign:'center', marginTop:4}}>7 天免费试用，无需信用卡</div>
+        </div>
+      </div>
+
+      <div className="ann" style={{textAlign:'center', padding:'8px', color:'#444'}}>
+        → Direction C: Split-Screen — fixed L copy / R live dashboard, tab-style feature nav
+      </div>
+    </div>
+  );
+}
+
+/* ─── Direction D: Editorial / Magazine ─── */
+function WireD() {
+  return (
+    <div className="wf" style={{width: 720, fontSize: 13, color: '#aaa'}}>
+      {/* Nav — ultra minimal */}
+      <div style={{padding:'10px 24px', display:'flex', justifyContent:'space-between', alignItems:'center', borderBottom:'1px solid #1e1e1e', marginBottom:2}}>
+        <div>
+          <span style={{fontSize:20, fontWeight:700, color:'#c9a93a', letterSpacing:-1}}>OPTIONS</span>
+          <span style={{fontSize:20, fontWeight:400, color:'#444'}}>AJI</span>
+        </div>
+        <div style={{display:'flex', gap:20, fontSize:11, color:'#555', alignItems:'center'}}>
+          <span>期权阿吉</span>
+          <span>|</span>
+          <span>功能</span><span>定价</span><span>博客</span>
+          <span className="wf-btn primary" style={{fontSize:11}}>Start Free</span>
+        </div>
+      </div>
+
+      {/* Hero — full bleed, editorial-style typography */}
+      <div style={{background:'#0d0d0d', padding:'32px 24px 0', marginBottom:2, overflow:'hidden'}}>
+        <div style={{display:'grid', gridTemplateColumns:'1fr 280px', gap:20, alignItems:'start'}}>
+          <div>
+            {/* Big editorial text */}
+            <div style={{fontSize:11, color:'#555', letterSpacing:4, textTransform:'uppercase', marginBottom:12, fontFamily:'Space Mono,monospace'}}>
+              AI-POWERED OPTIONS INTELLIGENCE
+            </div>
+            <div style={{fontSize:52, fontWeight:700, lineHeight:0.95, color:'#e8e6e0', marginBottom:8, letterSpacing:-2}}>
+              AI 驱动<br/>
+              <span style={{color:'#c9a93a', fontStyle:'italic'}}>期权</span><br/>
+              决策引擎
+            </div>
+            <div style={{width:60, height:2, background:'#8a7a30', margin:'12px 0'}}/>
+            <div className="wf-text" style={{fontSize:13, maxWidth:320, lineHeight:1.7, marginBottom:20}}>
+              实时 GEX 分析 + AI 期权问答 + 新闻情绪监控，一个平台搞定
+            </div>
+            <div style={{display:'flex', gap:10, alignItems:'center'}}>
+              <span className="wf-btn primary" style={{fontSize:13, padding:'8px 20px'}}>免费开始</span>
+              <span style={{fontSize:11, color:'#555'}}>↓ 查看 Demo</span>
+            </div>
+          </div>
+          {/* Right column — stacked data cards */}
+          <div style={{display:'flex', flexDirection:'column', gap:6}}>
+            {[
+              {sym:'SPY', price:'$548.32', gex:'+2.1B', gexPos:true, change:'+0.8%', pos:true},
+              {sym:'QQQ', price:'$472.15', gex:'-800M', gexPos:false, change:'-0.3%', pos:false},
+            ].map(t => (
+              <div key={t.sym} className="wf-box" style={{padding:'10px 12px'}}>
+                <div style={{display:'flex', justifyContent:'space-between', marginBottom:4}}>
+                  <span style={{fontWeight:700, color:'#e8e6e0', fontSize:14}}>{t.sym}</span>
+                  <span style={{fontSize:10, color: t.pos?'#3abf9a':'#bf5a5a'}}>{t.change}</span>
+                </div>
+                <div className="wf-gold" style={{fontSize:18, fontFamily:'Space Mono,monospace', marginBottom:4}}>{t.price}</div>
+                <div style={{display:'flex', justifyContent:'space-between', fontSize:10}}>
+                  <span style={{color:'#555'}}>GEX</span>
+                  <span style={{color: t.gexPos?'#3abf9a':'#bf5a5a'}}>{t.gex}</span>
+                </div>
+                <div style={{height:20, marginTop:6, display:'flex', alignItems:'flex-end', gap:1}}>
+                  {[40,55,70,45,85,60,35,50,75,90,55,65].map((h,i) => (
+                    <div key={i} style={{flex:1, height:`${h}%`, background: h>60?'#2a5a45':'#3a2a2a', borderRadius:'1px 1px 0 0'}}/>
+                  ))}
+                </div>
+              </div>
+            ))}
+            <div className="wf-box" style={{padding:'8px 12px', background:'#111'}}>
+              <div className="wf-label" style={{marginBottom:2}}>VIX &nbsp;<span style={{color:'#bf5a5a'}}>18.5</span></div>
+              <div style={{fontSize:10, color:'#444'}}>Put Wall 540 · Call Wall 555</div>
+            </div>
+          </div>
+        </div>
+        {/* Full-width dashboard preview at bottom of hero */}
+        <div className="wf-box muted" style={{height:60, marginTop:16, display:'flex', alignItems:'center', justifyContent:'center'}}>
+          <span className="wf-label">[Full dashboard screenshot / screenshot preview]</span>
+        </div>
+      </div>
+
+      {/* Data ticker */}
+      <div style={{padding:'5px 12px', background:'#0a0a0a', borderBottom:'1px solid #1a1a1a', marginBottom:2, fontSize:9, fontFamily:'Space Mono,monospace', color:'#444'}}>
+        LIVE: SPY $548.32 ▲0.8% | QQQ $472.15 ▼0.3% | VIX 18.5 | GEX Regime: Positive → supports range-bound price action
+      </div>
+
+      {/* Features — editorial 3-col with large numbers */}
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:1, marginBottom:2}}>
+        {[
+          {num:'01', title:'AI 期权问答', desc:'用中文提问，获得基于实时数据的专业分析'},
+          {num:'02', title:'实时 GEX', desc:'做市商 Gamma 敞口，Call/Put Wall 压力位'},
+          {num:'03', title:'信号推送', desc:'Discord/TG 实时推送，异动期权，宏观事件'},
+        ].map((f,i) => (
+          <div key={i} style={{padding:'16px', background:'#0f0f0f', borderRight: i<2?'1px solid #1a1a1a':'none'}}>
+            <div style={{fontSize:32, fontWeight:700, color:'#1e1e1e', fontFamily:'Space Mono,monospace', lineHeight:1}}>{f.num}</div>
+            <div className="wf-title" style={{fontSize:15, marginBottom:6}}>{f.title}</div>
+            <div className="wf-text" style={{fontSize:11, lineHeight:1.6}}>{f.desc}</div>
+            <div className="wf-box muted" style={{height:50, marginTop:10, display:'flex', alignItems:'center', justifyContent:'center'}}>
+              <span className="wf-label">[preview]</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Testimonials — editorial quote style */}
+      <div style={{background:'#0a0a0a', padding:'14px 20px', marginBottom:2}}>
+        <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:16}}>
+          {[
+            'GEX 数据让我终于看懂了做市商行为，不再被假突破骗',
+            'AI 问答用中文回答，比 GPT 更懂期权，太实用了',
+            '信号推送帮我抓住了 NVDA 财报前的异动，赚了一笔',
+          ].map((q,i) => (
+            <div key={i} style={{borderTop:'1px solid #2a2a2a', paddingTop:12}}>
+              <div style={{fontSize:12, color:'#888', lineHeight:1.6, marginBottom:8, fontStyle:'italic'}}>{q}</div>
+              <div style={{height:6, width:60, background:'#2a2a2a', borderRadius:2}}/>
+              <div className="wf-label" style={{marginTop:4}}>用户 {i+1}，华语期权交易者</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Pricing — horizontal comparison */}
+      <div style={{padding:'14px 16px', background:'#0d0d0d', marginBottom:2}}>
+        <div className="wf-title" style={{fontSize:14, marginBottom:10, textAlign:'center'}}>选择适合你的计划</div>
+        <div style={{display:'grid', gridTemplateColumns:'100px 1fr 1fr 1fr', gap:0}}>
+          <div/>
+          {['Free $0','Pro $49/mo ★','Alpha $149/mo'].map((p,i) => (
+            <div key={i} style={{textAlign:'center', padding:'6px', borderBottom:'1px solid #2a2a2a', borderLeft:'1px solid #1a1a1a', background: i===1?'#1a1708':'transparent'}}>
+              <span className={`wf-title ${i===1?'wf-gold':''}`} style={{fontSize:11}}>{p}</span>
+            </div>
+          ))}
+          {['AI 问答','实时 GEX','信号推送','1v1 咨询'].map((feat,fi) => (
+            <React.Fragment key={fi}>
+              <div style={{fontSize:10, color:'#555', padding:'5px 0', borderBottom:'1px solid #1a1a1a'}}>{feat}</div>
+              {[fi===0?'3次/天':'✗', '✓','✓'].map((v,vi) => (
+                <div key={vi} style={{textAlign:'center', fontSize:10, padding:'5px', borderLeft:'1px solid #1a1a1a', borderBottom:'1px solid #1a1a1a', background: vi===1?'#1a1708':'transparent', color: v==='✓'?'#3abf9a': v==='✗'?'#555':'#888'}}>{v}</div>
+              ))}
+            </React.Fragment>
+          ))}
+        </div>
+      </div>
+
+      <div className="ann" style={{textAlign:'center', padding:'8px', color:'#444'}}>
+        → Direction D: Editorial — large display type, asymmetric hero, feature comparison table
+      </div>
+    </div>
+  );
+}
+
+/* ─── Direction E: Mobile-First / App-Centric ─── */
+function WireE() {
+  return (
+    <div className="wf" style={{width: 720, fontSize: 13, color: '#aaa'}}>
+      {/* Nav */}
+      <div style={{padding:'8px 16px', display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:2, borderBottom:'1px solid #1a1a1a'}}>
+        <div style={{display:'flex', alignItems:'center', gap:10}}>
+          <div style={{width:28, height:28, background:'#8a7a30', borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center'}}>
+            <span style={{fontSize:12, color:'#0a0a0a', fontWeight:700}}>OA</span>
+          </div>
+          <span className="wf-title" style={{fontSize:13}}>OptionsAji <span className="wf-muted" style={{fontWeight:400}}>期权阿吉</span></span>
+        </div>
+        <div style={{display:'flex', gap:8}}>
+          <span className="wf-btn outline" style={{fontSize:10}}>登录</span>
+          <span className="wf-btn primary" style={{fontSize:10}}>免费试用</span>
+        </div>
+      </div>
+
+      {/* Hero — center + floating phone */}
+      <div style={{display:'grid', gridTemplateColumns:'1fr 220px', gap:0, background:'#0d0d0d', marginBottom:2, alignItems:'center'}}>
+        <div style={{padding:'28px 24px'}}>
+          <div style={{display:'inline-block', background:'#1a1708', border:'1px solid #3a3010', padding:'3px 10px', borderRadius:20, marginBottom:12}}>
+            <span className="wf-gold" style={{fontSize:10}}>期权阿吉 2.0 — GEX Engine 升级</span>
+          </div>
+          <div className="wf-title" style={{fontSize:30, lineHeight:1.2, marginBottom:10}}>
+            华语交易者的<br/>
+            <span className="wf-gold">AI 期权助手</span>
+          </div>
+          <div className="wf-text" style={{fontSize:12, marginBottom:18, lineHeight:1.7}}>
+            实时 GEX 分析 · AI 中文问答<br/>
+            新闻情绪 · 智能信号推送
+          </div>
+          <div style={{display:'flex', gap:8, flexWrap:'wrap'}}>
+            <span className="wf-btn primary" style={{fontSize:13}}>免费开始 / Start Free</span>
+            <span className="wf-btn outline" style={{fontSize:13}}>▶ 演示视频</span>
+          </div>
+          <div style={{marginTop:16, display:'flex', gap:16}}>
+            {['1,000+ 用户','7天免费','无需信用卡'].map(b => (
+              <span key={b} style={{fontSize:10, color:'#555'}}><span style={{color:'#3abf9a'}}>●</span> {b}</span>
+            ))}
+          </div>
+        </div>
+
+        {/* Phone frame mockup */}
+        <div style={{padding:'16px 16px 0', display:'flex', justifyContent:'center', alignItems:'flex-end'}}>
+          <div style={{width:140, background:'#111', border:'3px solid #2a2a2a', borderRadius:'18px 18px 0 0', overflow:'hidden'}}>
+            {/* Phone status bar */}
+            <div style={{background:'#0a0a0a', padding:'4px 8px', display:'flex', justifyContent:'space-between', fontSize:8, color:'#555'}}>
+              <span>9:41</span><span>●●●</span>
+            </div>
+            {/* App content */}
+            <div style={{padding:'8px'}}>
+              <div className="wf-label" style={{fontSize:9, marginBottom:4}}>今日 GEX 快报</div>
+              <div className="wf-box" style={{padding:'5px', marginBottom:4}}>
+                <div style={{display:'flex', justifyContent:'space-between', fontSize:10}}>
+                  <span className="wf-gold">SPY</span>
+                  <span style={{color:'#3abf9a'}}>+0.8%</span>
+                </div>
+                <div style={{fontSize:9, color:'#555'}}>GEX: <span style={{color:'#3abf9a'}}>+2.1B ↑</span></div>
+                <div style={{height:15, display:'flex', alignItems:'flex-end', gap:1, marginTop:3}}>
+                  {[40,60,80,50,90,65,35,55,75,90].map((h,i) => (
+                    <div key={i} style={{flex:1, height:`${h}%`, background:h>50?'#2a5a45':'#3a2a2a'}}/>
+                  ))}
+                </div>
+              </div>
+              {/* Chat bubble */}
+              <div className="wf-chat-bubble ai" style={{fontSize:9, marginBottom:4}}>
+                SPY 当前 GEX 正值，适合 IC 策略 ✓
+              </div>
+              {/* Notification */}
+              <div style={{background:'#1a1a2a', border:'1px solid #2a2a4a', borderRadius:4, padding:'4px 6px', fontSize:9}}>
+                <span style={{color:'#6a6abf'}}>⚡ 信号</span>
+                <div style={{color:'#888', marginTop:2}}>NVDA 异动期权检测到...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Data bar */}
+      <div style={{background:'#070707', padding:'5px 12px', borderBottom:'1px solid #1a1a1a', marginBottom:2, fontSize:9, fontFamily:'Space Mono,monospace'}}>
+        <span className="wf-gold">SPY</span> 548.32 <span style={{color:'#3abf9a'}}>▲0.8%</span> &nbsp;|&nbsp;
+        <span className="wf-gold">QQQ</span> 472.15 <span style={{color:'#bf5a5a'}}>▼0.3%</span> &nbsp;|&nbsp;
+        VIX 18.5 &nbsp;|&nbsp; Put Wall <span style={{color:'#bf5a5a'}}>540</span> &nbsp;|&nbsp; Call Wall <span style={{color:'#3abf9a'}}>555</span>
+      </div>
+
+      {/* Features — card grid with icons */}
+      <div style={{display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:6, padding:'12px', background:'#0e0e0e', marginBottom:2}}>
+        {[
+          {icon:'[AI]', color:'#c9a93a', title:'AI 期权问答', sub:'中文提问，实时回答'},
+          {icon:'[▦]', color:'#3abf9a', title:'实时 GEX', sub:'做市商对冲压力图'},
+          {icon:'[⚡]', color:'#6a6abf', title:'智能信号', sub:'Discord/TG 推送'},
+        ].map((f,i) => (
+          <div key={i} style={{background:'#141414', border:'1px solid #222', borderRadius:6, padding:'12px'}}>
+            <div style={{fontSize:18, marginBottom:8, fontFamily:'Space Mono,monospace', color:f.color}}>{f.icon}</div>
+            <div className="wf-title" style={{fontSize:12, marginBottom:3}}>{f.title}</div>
+            <div className="wf-label" style={{fontSize:10, lineHeight:1.5}}>{f.sub}</div>
+            <div style={{height:35, background:'#1a1a1a', borderRadius:3, marginTop:8, display:'flex', alignItems:'center', justifyContent:'center'}}>
+              <span className="wf-label" style={{fontSize:9}}>[preview]</span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Social proof + Pricing side by side */}
+      <div style={{display:'grid', gridTemplateColumns:'1.2fr 1fr', gap:6, padding:'12px', background:'#0e0e0e', marginBottom:2}}>
+        {/* Testimonials */}
+        <div>
+          <div className="wf-title" style={{fontSize:12, marginBottom:8, color:'#666'}}>— 1,000+ 华语交易者的选择</div>
+          {['"GEX 让我看懂做市商"','"AI 回答比 GPT 更懂期权"','"信号帮我避开了大跌"'].map((q,i) => (
+            <div key={i} style={{background:'#141414', border:'1px solid #1e1e1e', borderRadius:4, padding:'7px', marginBottom:5, fontSize:11, color:'#777', display:'flex', gap:6, alignItems:'flex-start'}}>
+              <div style={{width:16, height:16, background:'#2a2a2a', borderRadius:8, flexShrink:0}}/>
+              <div>{q}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Pricing mini */}
+        <div style={{display:'flex', flexDirection:'column', gap:5}}>
+          <div className="wf-title" style={{fontSize:12, marginBottom:3, color:'#666'}}>— 定价</div>
+          {[
+            {plan:'Free', price:'$0/mo', feat:'3次问答/天'},
+            {plan:'Pro ★', price:'$49/mo', feat:'无限 + 实时GEX', gold:true},
+            {plan:'Alpha', price:'$149/mo', feat:'全功能 + 1v1'},
+          ].map(p => (
+            <div key={p.plan} style={{display:'flex', justifyContent:'space-between', padding:'7px 10px', border: p.gold?'1.5px solid #8a7a30':'1px solid #1e1e1e', borderRadius:4, background: p.gold?'#1a1708':'#141414'}}>
+              <div>
+                <div className={`wf-title ${p.gold?'wf-gold':''}`} style={{fontSize:11}}>{p.plan}</div>
+                <div className="wf-label" style={{fontSize:9}}>{p.feat}</div>
+              </div>
+              <div className={`${p.gold?'wf-gold':''}`} style={{fontSize:13, fontFamily:'Space Mono,monospace', alignSelf:'center'}}>{p.price}</div>
+            </div>
+          ))}
+          <div style={{fontSize:9, color:'#444', textAlign:'center'}}>7 天免费试用 · 无需信用卡</div>
+        </div>
+      </div>
+
+      {/* CTA Section */}
+      <div style={{background:'#0a0a0a', border:'1px solid #1e1e1e', margin:'8px', borderRadius:6, padding:'16px', textAlign:'center'}}>
+        <div className="wf-title" style={{fontSize:18, marginBottom:6}}>
+          你的下一笔期权交易，<span className="wf-gold">让 AI 帮你分析</span>
+        </div>
+        <span className="wf-btn primary" style={{fontSize:14, padding:'8px 28px'}}>免费注册</span>
+      </div>
+
+      <div className="ann" style={{textAlign:'center', padding:'8px', color:'#444'}}>
+        → Direction E: Mobile-First / App-Centric — phone mockup hero, card grid, compact layout
+      </div>
+    </div>
+  );
+}
+
+/* ─── Main canvas ─── */
+function App() {
+  return (
+    <DesignCanvas title="OptionsAji — Wireframe Explorations">
+      <DCSection id="a" title="Direction A — Terminal-First">
+        <DCArtboard id="a1" label="Bloomberg-Style Dense Grid" width={720} height={700}>
+          <WireA />
+        </DCArtboard>
+      </DCSection>
+      <DCSection id="b" title="Direction B — Cinematic SaaS">
+        <DCArtboard id="b1" label="Large Hero, Alternating Features" width={720} height={700}>
+          <WireB />
+        </DCArtboard>
+      </DCSection>
+      <DCSection id="c" title="Direction C — Split-Screen Asymmetric">
+        <DCArtboard id="c1" label="Fixed Copy / Live Dashboard, Tab Nav" width={720} height={700}>
+          <WireC />
+        </DCArtboard>
+      </DCSection>
+      <DCSection id="d" title="Direction D — Editorial / Magazine">
+        <DCArtboard id="d1" label="Large Display Type, Feature Table" width={720} height={760}>
+          <WireD />
+        </DCArtboard>
+      </DCSection>
+      <DCSection id="e" title="Direction E — Mobile-First / App-Centric">
+        <DCArtboard id="e1" label="Phone Mockup Hero, Card Grid" width={720} height={740}>
+          <WireE />
+        </DCArtboard>
+      </DCSection>
+    </DesignCanvas>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>

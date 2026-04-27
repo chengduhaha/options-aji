@@ -1,0 +1,1179 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OptionsAji — AI 期权问答</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<style>
+:root {
+  --bg: #0A1628;
+  --panel: #111D2E;
+  --panel2: #0D1829;
+  --border: rgba(212,175,55,0.15);
+  --border2: rgba(255,255,255,0.06);
+  --gold: #D4AF37;
+  --gold-dim: rgba(212,175,55,0.12);
+  --green: #00D4AA;
+  --red: #FF6B6B;
+  --text: #E8E6E0;
+  --muted: #8B8D97;
+  --mono: 'JetBrains Mono', monospace;
+  --ui: 'Space Grotesk', sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body, #root { height: 100%; overflow: hidden; }
+body { font-family: var(--ui); background: var(--bg); color: var(--text); }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(212,175,55,0.2); border-radius: 2px; }
+
+/* Animations */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; } to { opacity: 1; }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; } 50% { opacity: 1; }
+}
+@keyframes dotBounce {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.4; }
+  40% { transform: translateY(-4px); opacity: 1; }
+}
+@keyframes shimmer {
+  0% { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes goldGlow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(212,175,55,0); }
+  50% { box-shadow: 0 0 16px 2px rgba(212,175,55,0.18); }
+}
+@keyframes checkIn {
+  from { transform: scale(0) rotate(-45deg); opacity: 0; }
+  to   { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes barGrow {
+  from { transform: scaleY(0); } to { transform: scaleY(1); }
+}
+
+.fade-up { animation: fadeUp 0.35s ease forwards; }
+.fade-in { animation: fadeIn 0.3s ease forwards; }
+.slide-left { animation: slideInLeft 0.35s ease forwards; }
+.slide-right { animation: slideInRight 0.35s ease forwards; }
+
+/* Layout */
+.app-shell {
+  display: grid;
+  grid-template-columns: 240px 1fr 300px;
+  height: 100vh;
+  overflow: hidden;
+}
+.app-shell.right-collapsed {
+  grid-template-columns: 240px 1fr 0px;
+}
+
+/* Sidebar */
+.sidebar {
+  background: var(--panel2);
+  border-right: 1px solid var(--border2);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-logo {
+  padding: 20px 16px 16px;
+  border-bottom: 1px solid var(--border2);
+  display: flex; align-items: center; gap: 10px;
+}
+.logo-mark {
+  width: 32px; height: 32px;
+  background: linear-gradient(135deg, #D4AF37 0%, #a8832a 100%);
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 700; color: #0A1628;
+  flex-shrink: 0;
+}
+.logo-text { font-size: 15px; font-weight: 600; color: var(--text); line-height: 1.1; }
+.logo-sub { font-size: 10px; color: var(--muted); }
+
+.sidebar-nav { flex: 1; padding: 12px 8px; overflow-y: auto; }
+.nav-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 10px; border-radius: 7px;
+  cursor: pointer; margin-bottom: 2px;
+  font-size: 13.5px; color: var(--muted);
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+  user-select: none;
+}
+.nav-item:hover { background: rgba(255,255,255,0.04); color: var(--text); }
+.nav-item.active {
+  background: var(--gold-dim);
+  border-color: var(--border);
+  color: var(--gold);
+}
+.nav-icon { width: 18px; height: 18px; opacity: 0.8; flex-shrink: 0; }
+.nav-badge {
+  margin-left: auto; background: var(--gold); color: #0A1628;
+  font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px;
+}
+
+.sidebar-user {
+  padding: 12px 14px;
+  border-top: 1px solid var(--border2);
+  display: flex; align-items: center; gap: 10px;
+}
+.user-avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: linear-gradient(135deg, #2a4a6a 0%, #1a3a5a 100%);
+  border: 1.5px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 600; color: var(--gold);
+  flex-shrink: 0;
+}
+.user-name { font-size: 12.5px; color: var(--text); font-weight: 500; }
+.user-plan { font-size: 10px; color: var(--gold); }
+
+.sidebar-plan {
+  padding: 10px 14px 6px;
+  border-top: 1px solid var(--border2);
+}
+.plan-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: var(--gold-dim); border: 1px solid var(--border);
+  padding: 3px 8px; border-radius: 5px;
+  font-size: 11px; font-weight: 600; color: var(--gold);
+  margin-bottom: 6px;
+}
+.usage-bar-bg {
+  height: 3px; background: rgba(255,255,255,0.06); border-radius: 2px;
+  margin: 4px 0;
+}
+.usage-bar-fill {
+  height: 100%; border-radius: 2px;
+  background: linear-gradient(90deg, var(--gold) 0%, #a8832a 100%);
+  transition: width 0.4s ease;
+}
+.usage-text { font-size: 10px; color: var(--muted); }
+
+/* Main chat area */
+.chat-area {
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--bg);
+}
+
+.chat-toolbar {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--border2);
+  display: flex; align-items: center; gap: 10px;
+  background: var(--panel2);
+  flex-shrink: 0;
+}
+.ticker-select {
+  background: var(--panel); border: 1px solid var(--border);
+  color: var(--gold); padding: 5px 10px; border-radius: 6px;
+  font-family: var(--mono); font-size: 12px; font-weight: 600;
+  cursor: pointer; outline: none;
+  appearance: none;
+  padding-right: 22px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23D4AF37'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 8px center;
+}
+.mode-tabs {
+  display: flex; gap: 2px;
+  background: var(--panel); border: 1px solid var(--border2);
+  padding: 3px; border-radius: 7px;
+}
+.mode-tab {
+  padding: 4px 10px; border-radius: 5px; font-size: 12px;
+  cursor: pointer; color: var(--muted); transition: all 0.15s;
+  white-space: nowrap;
+}
+.mode-tab.active {
+  background: var(--gold-dim); color: var(--gold);
+  border: 1px solid var(--border);
+}
+.toolbar-spacer { flex: 1; }
+.new-chat-btn {
+  display: flex; align-items: center; gap: 6px;
+  background: transparent; border: 1px solid var(--border2);
+  color: var(--muted); padding: 5px 12px; border-radius: 6px;
+  font-size: 12px; cursor: pointer; font-family: var(--ui);
+  transition: all 0.15s;
+}
+.new-chat-btn:hover { border-color: var(--border); color: var(--text); }
+.collapse-btn {
+  background: transparent; border: 1px solid var(--border2);
+  color: var(--muted); width: 30px; height: 30px; border-radius: 6px;
+  cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s;
+}
+.collapse-btn:hover { border-color: var(--border); color: var(--text); }
+
+/* Messages */
+.messages-container {
+  flex: 1; overflow-y: auto; padding: 20px 18px;
+  display: flex; flex-direction: column; gap: 20px;
+}
+
+.msg-row { display: flex; gap: 10px; max-width: 800px; }
+.msg-row.user { flex-direction: row-reverse; margin-left: auto; }
+.msg-row.ai { flex-direction: row; }
+
+.ai-avatar {
+  width: 30px; height: 30px; border-radius: 8px; flex-shrink: 0;
+  background: linear-gradient(135deg, #D4AF37 0%, #a8832a 100%);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: #0A1628;
+  margin-top: 2px;
+}
+
+.user-bubble {
+  background: #162035;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 14px 14px 4px 14px;
+  padding: 10px 14px;
+  font-size: 14px; color: var(--text); line-height: 1.55;
+  max-width: 480px;
+}
+.user-bubble .msg-time { font-size: 10px; color: var(--muted); margin-top: 4px; text-align: right; }
+
+.ai-content { flex: 1; max-width: 680px; }
+.ai-bubble {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px 14px 14px 14px;
+  padding: 14px 16px;
+  font-size: 13.5px; color: var(--text); line-height: 1.65;
+  position: relative;
+}
+.ai-bubble::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0; height: 1px;
+  background: linear-gradient(90deg, var(--gold) 0%, transparent 60%);
+  border-radius: 4px 14px 0 0;
+}
+.msg-time { font-size: 10px; color: var(--muted); margin-top: 5px; }
+
+/* Thinking indicator */
+.thinking-steps {
+  display: flex; flex-direction: column; gap: 7px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: rgba(0,0,0,0.2);
+  border-radius: 8px; border: 1px solid var(--border2);
+}
+.think-step {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--muted);
+  font-family: var(--mono);
+}
+.think-step.done { color: var(--green); }
+.think-step.active { color: var(--text); }
+.step-icon { width: 16px; height: 16px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+.step-check { animation: checkIn 0.3s ease forwards; color: var(--green); }
+.step-spinner {
+  width: 12px; height: 12px; border: 1.5px solid rgba(255,255,255,0.1);
+  border-top-color: var(--gold); border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.step-dots span {
+  display: inline-block; width: 4px; height: 4px; border-radius: 50%;
+  background: var(--muted); margin: 0 1px;
+}
+.step-dots span:nth-child(1) { animation: dotBounce 1s 0s infinite; }
+.step-dots span:nth-child(2) { animation: dotBounce 1s 0.15s infinite; }
+.step-dots span:nth-child(3) { animation: dotBounce 1s 0.3s infinite; }
+
+/* GEX card */
+.gex-card {
+  background: rgba(0,0,0,0.25);
+  border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px;
+  margin: 10px 0;
+}
+.gex-card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.gex-card-title { font-size: 11px; color: var(--muted); font-family: var(--mono); letter-spacing: 0.05em; text-transform: uppercase; }
+.gex-regime {
+  font-size: 10px; padding: 2px 8px; border-radius: 10px;
+  font-weight: 600; font-family: var(--mono);
+}
+.gex-regime.pos { background: rgba(0,212,170,0.15); color: var(--green); border: 1px solid rgba(0,212,170,0.3); }
+.gex-regime.neg { background: rgba(255,107,107,0.15); color: var(--red); border: 1px solid rgba(255,107,107,0.3); }
+
+.gex-metrics { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.gex-metric { text-align: center; }
+.gex-metric-val {
+  font-family: var(--mono); font-size: 15px; font-weight: 600;
+  line-height: 1;
+}
+.gex-metric-val.pos { color: var(--green); }
+.gex-metric-val.neg { color: var(--red); }
+.gex-metric-val.neutral { color: var(--gold); }
+.gex-metric-label { font-size: 9.5px; color: var(--muted); margin-top: 3px; text-transform: uppercase; letter-spacing: 0.04em; }
+
+.gex-bar-area {
+  height: 42px; display: flex; align-items: flex-end; gap: 2px;
+  transform-origin: bottom;
+}
+.gex-bar {
+  flex: 1; border-radius: 2px 2px 0 0;
+  transform-origin: bottom;
+  animation: barGrow 0.6s ease forwards;
+  animation-delay: calc(var(--i) * 0.03s);
+  transform: scaleY(0);
+}
+.gex-bar.pos { background: linear-gradient(to top, #00a080, #00D4AA); }
+.gex-bar.neg { background: linear-gradient(to top, #cc4444, #FF6B6B); }
+.gex-bar-labels {
+  display: flex; justify-content: space-between;
+  margin-top: 4px;
+  font-size: 9px; color: var(--muted); font-family: var(--mono);
+}
+
+/* Strategy card */
+.strategy-card {
+  background: rgba(212,175,55,0.06);
+  border: 1px solid rgba(212,175,55,0.25);
+  border-radius: 10px; padding: 12px 14px;
+  margin: 10px 0;
+}
+.strategy-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 10px;
+}
+.strategy-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-family: var(--mono); }
+.confidence-badge {
+  font-size: 11px; font-weight: 700; font-family: var(--mono);
+  color: var(--green); background: rgba(0,212,170,0.1);
+  border: 1px solid rgba(0,212,170,0.25);
+  padding: 2px 8px; border-radius: 10px;
+}
+.strategy-name { font-size: 16px; font-weight: 700; color: var(--gold); margin-bottom: 8px; }
+.strategy-details { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.strategy-detail-item { }
+.sdl { font-size: 9.5px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 2px; }
+.sdv { font-size: 12.5px; font-family: var(--mono); font-weight: 600; color: var(--text); }
+.strategy-warning {
+  margin-top: 10px; padding: 7px 10px;
+  background: rgba(255,107,107,0.08); border: 1px solid rgba(255,107,107,0.2);
+  border-radius: 6px; font-size: 12px; color: #ff9090;
+  display: flex; align-items: center; gap: 6px;
+}
+
+/* Tweet card */
+.tweet-card {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 8px; padding: 10px 12px;
+  margin: 8px 0;
+  display: flex; gap: 10px;
+}
+.tweet-avatar {
+  width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+  background: #1d9bf0; display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: white;
+}
+.tweet-name { font-size: 12px; font-weight: 600; color: var(--text); }
+.tweet-handle { font-size: 11px; color: var(--muted); }
+.tweet-text { font-size: 12.5px; color: var(--text); margin-top: 5px; line-height: 1.5; }
+.tweet-time { font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+/* AI text formatting */
+.ai-para { margin-bottom: 10px; }
+.ai-para:last-child { margin-bottom: 0; }
+.ai-bold { font-weight: 600; color: var(--text); }
+.ai-highlight { color: var(--gold); font-family: var(--mono); font-size: 0.9em; }
+.ai-green { color: var(--green); font-family: var(--mono); font-size: 0.9em; }
+.ai-red { color: var(--red); font-family: var(--mono); font-size: 0.9em; }
+
+/* Input area */
+.input-area {
+  padding: 14px 18px; border-top: 1px solid var(--border2);
+  background: var(--panel2); flex-shrink: 0;
+}
+.quick-chips {
+  display: flex; gap: 6px; margin-bottom: 10px; flex-wrap: wrap;
+}
+.chip {
+  padding: 4px 10px; border-radius: 20px;
+  border: 1px solid var(--border2); background: transparent;
+  color: var(--muted); font-size: 11.5px; cursor: pointer;
+  font-family: var(--ui); transition: all 0.15s;
+}
+.chip:hover { border-color: var(--border); color: var(--gold); background: var(--gold-dim); }
+
+.input-row {
+  display: flex; gap: 10px; align-items: flex-end;
+}
+.input-box {
+  flex: 1; background: var(--panel); border: 1px solid var(--border2);
+  border-radius: 10px; padding: 10px 14px;
+  color: var(--text); font-family: var(--ui); font-size: 14px;
+  resize: none; outline: none; min-height: 44px; max-height: 120px;
+  line-height: 1.5; transition: border-color 0.2s;
+}
+.input-box::placeholder { color: var(--muted); }
+.input-box:focus { border-color: rgba(212,175,55,0.4); }
+
+.send-btn {
+  width: 44px; height: 44px; border-radius: 10px; flex-shrink: 0;
+  background: linear-gradient(135deg, #D4AF37 0%, #a8832a 100%);
+  border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s; color: #0A1628;
+  animation: goldGlow 3s ease infinite;
+}
+.send-btn:hover { transform: scale(1.05); box-shadow: 0 0 20px rgba(212,175,55,0.4); }
+.send-btn:active { transform: scale(0.97); }
+.send-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+/* Right panel */
+.right-panel {
+  background: var(--panel2); border-left: 1px solid var(--border2);
+  display: flex; flex-direction: column; overflow: hidden;
+  transition: width 0.25s ease;
+}
+.right-panel-inner { width: 300px; display: flex; flex-direction: column; height: 100%; overflow: hidden; }
+
+.panel-section {
+  padding: 14px 14px 12px;
+  border-bottom: 1px solid var(--border2);
+}
+.panel-section-title {
+  font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--muted); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+}
+.live-dot {
+  width: 5px; height: 5px; border-radius: 50%; background: var(--green);
+  animation: pulse 1.5s ease infinite;
+}
+
+.ticker-header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.ticker-sym { font-size: 18px; font-weight: 700; color: var(--text); font-family: var(--mono); }
+.ticker-price { font-size: 22px; font-weight: 700; color: var(--text); font-family: var(--mono); }
+.ticker-change { font-size: 13px; font-family: var(--mono); font-weight: 600; }
+.ticker-change.pos { color: var(--green); }
+.ticker-change.neg { color: var(--red); }
+
+/* Sparkline */
+.sparkline-wrap { margin: 8px 0; }
+
+.iv-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 8px; }
+.iv-item { background: rgba(255,255,255,0.03); border: 1px solid var(--border2); border-radius: 6px; padding: 6px 8px; }
+.iv-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.iv-val { font-size: 14px; font-weight: 600; font-family: var(--mono); color: var(--text); margin-top: 2px; }
+
+/* News feed */
+.news-scroll { flex: 1; overflow-y: auto; }
+.news-item {
+  padding: 10px 14px; border-bottom: 1px solid var(--border2);
+  cursor: pointer; transition: background 0.15s;
+}
+.news-item:hover { background: rgba(255,255,255,0.02); }
+.news-sentiment { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; margin-bottom: 4px; font-weight: 600; }
+.news-sentiment.bull { color: var(--green); }
+.news-sentiment.bear { color: var(--red); }
+.news-sentiment.neutral { color: var(--muted); }
+.news-headline { font-size: 12px; color: var(--text); line-height: 1.45; margin-bottom: 3px; }
+.news-source { font-size: 10px; color: var(--muted); }
+.news-footer { padding: 10px 14px; }
+.news-more { font-size: 12px; color: var(--gold); cursor: pointer; }
+.news-more:hover { text-decoration: underline; }
+
+/* Divider line in AI message */
+.ai-divider { border: none; border-top: 1px solid rgba(255,255,255,0.06); margin: 10px 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+const { useState, useEffect, useRef, useCallback } = React;
+
+/* ── Sparkline SVG ── */
+function Sparkline({ data, width = 272, height = 48, positive = true }) {
+  const min = Math.min(...data), max = Math.max(...data);
+  const range = max - min || 1;
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * width;
+    const y = height - ((v - min) / range) * (height - 4) - 2;
+    return `${x},${y}`;
+  });
+  const pathD = `M ${pts.join(' L ')}`;
+  const areaD = `M 0,${height} L ${pts.join(' L ')} L ${width},${height} Z`;
+  const color = positive ? '#00D4AA' : '#FF6B6B';
+  return (
+    <svg width={width} height={height} style={{ display: 'block' }}>
+      <defs>
+        <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaD} fill="url(#sg)" />
+      <path d={pathD} fill="none" stroke={color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/* ── GEX Bar Chart card ── */
+function GEXCard({ ticker = 'SPY' }) {
+  const bars = [
+    { h: 30, pos: false }, { h: 45, pos: false }, { h: 60, pos: true },
+    { h: 80, pos: true }, { h: 95, pos: true }, { h: 70, pos: true },
+    { h: 55, pos: true }, { h: 40, pos: false }, { h: 35, pos: false },
+    { h: 50, pos: true }, { h: 85, pos: true }, { h: 65, pos: true },
+    { h: 30, pos: false }, { h: 45, pos: true }, { h: 25, pos: false },
+  ];
+  return (
+    <div className="gex-card fade-in">
+      <div className="gex-card-header">
+        <span className="gex-card-title">{ticker} · GEX Exposure</span>
+        <span className="gex-regime pos">Positive γ · 低波动</span>
+      </div>
+      <div className="gex-metrics">
+        <div className="gex-metric">
+          <div className="gex-metric-val pos">+2.1B</div>
+          <div className="gex-metric-label">Net GEX</div>
+        </div>
+        <div className="gex-metric">
+          <div className="gex-metric-val neutral">543</div>
+          <div className="gex-metric-label">γ Flip</div>
+        </div>
+        <div className="gex-metric">
+          <div className="gex-metric-val pos">555</div>
+          <div className="gex-metric-label">Call Wall</div>
+        </div>
+        <div className="gex-metric">
+          <div className="gex-metric-val neg">538</div>
+          <div className="gex-metric-label">Put Wall</div>
+        </div>
+      </div>
+      <div className="gex-bar-area">
+        {bars.map((b, i) => (
+          <div key={i} className={`gex-bar ${b.pos ? 'pos' : 'neg'}`}
+            style={{ height: `${b.h}%`, '--i': i }} />
+        ))}
+      </div>
+      <div className="gex-bar-labels">
+        <span>Put Wall 538</span>
+        <span style={{ color: '#D4AF37' }}>γ Flip 543</span>
+        <span>Call Wall 555</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Strategy card ── */
+function StrategyCard() {
+  return (
+    <div className="strategy-card fade-in">
+      <div className="strategy-header">
+        <span className="strategy-title">策略推荐</span>
+        <span className="confidence-badge">信心度 78%</span>
+      </div>
+      <div className="strategy-name">Credit Put Spread</div>
+      <div className="strategy-details">
+        <div className="strategy-detail-item">
+          <div className="sdl">结构</div>
+          <div className="sdv" style={{ fontFamily: 'var(--mono)', fontSize: 12 }}>Sell 540P / Buy 535P</div>
+        </div>
+        <div className="strategy-detail-item">
+          <div className="sdl">到期日</div>
+          <div className="sdv">5月2日</div>
+        </div>
+        <div className="strategy-detail-item">
+          <div className="sdl">收益/风险</div>
+          <div className="sdv" style={{ color: 'var(--green)' }}>1 : 2.5</div>
+        </div>
+      </div>
+      <div className="strategy-warning">
+        <span>⚠️</span>
+        <span>下周二 FOMC 会议，建议在周五前平仓或加 hedge</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Tweet card ── */
+function TweetCard() {
+  return (
+    <div className="tweet-card fade-in">
+      <div className="tweet-avatar">T</div>
+      <div>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'baseline' }}>
+          <span className="tweet-name">Donald J. Trump</span>
+          <span className="tweet-handle">@realDonaldTrump</span>
+        </div>
+        <div className="tweet-text">
+          New 25% tariffs on ALL Chinese goods effective immediately. No exceptions. America First! 🇺🇸
+        </div>
+        <div className="tweet-time">3 分钟前 · Twitter/X</div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Thinking steps ── */
+function ThinkingSteps({ steps }) {
+  return (
+    <div className="thinking-steps">
+      {steps.map((s, i) => (
+        <div key={i} className={`think-step ${s.state}`}>
+          <div className="step-icon">
+            {s.state === 'done' && <span className="step-check">✓</span>}
+            {s.state === 'active' && <div className="step-spinner" />}
+            {s.state === 'pending' && <span style={{ color: 'var(--muted)', fontSize: 10 }}>○</span>}
+          </div>
+          <span>{s.label}</span>
+          {s.state === 'active' && (
+            <span className="step-dots" style={{ marginLeft: 4 }}>
+              <span /><span /><span />
+            </span>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── AI Message ── */
+function AIMessage({ msg, isThinking }) {
+  return (
+    <div className="msg-row ai slide-left">
+      <div className="ai-avatar">A</div>
+      <div className="ai-content">
+        <div className="ai-bubble">
+          {isThinking && <ThinkingSteps steps={msg.thinkSteps} />}
+          {!isThinking && msg.thinkSteps && msg.showThinkDone && (
+            <ThinkingSteps steps={msg.thinkSteps.map(s => ({ ...s, state: 'done' }))} />
+          )}
+          {msg.content}
+        </div>
+        <div className="msg-time">{msg.time}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ── User Message ── */
+function UserMessage({ msg }) {
+  return (
+    <div className="msg-row user slide-right">
+      <div className="user-bubble">
+        {msg.text}
+        <div className="msg-time">{msg.time}</div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Sidebar ── */
+const NAV_ITEMS = [
+  { id: 'qa', label: 'AI 问答', active: true },
+  { id: 'gex', label: 'GEX Dashboard' },
+  { id: 'signals', label: '信号中心', badge: '3' },
+  { id: 'news', label: '新闻流' },
+  { id: 'strategy', label: '策略评估' },
+  { id: 'settings', label: '设置' },
+];
+
+function NavIcon({ id }) {
+  const icons = {
+    qa: (
+      <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <path d="M2 3h14v10H9l-4 3V13H2V3z"/>
+      </svg>
+    ),
+    gex: (
+      <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <rect x="2" y="10" width="3" height="6" rx="1"/>
+        <rect x="7" y="6" width="3" height="10" rx="1"/>
+        <rect x="12" y="2" width="3" height="14" rx="1"/>
+      </svg>
+    ),
+    signals: (
+      <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <path d="M9 1v3M9 14v3M1 9h3M14 9h3M3.5 3.5l2 2M12.5 12.5l2 2M12.5 3.5l-2 2M5.5 12.5l-2 2"/>
+        <circle cx="9" cy="9" r="3"/>
+      </svg>
+    ),
+    news: (
+      <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <rect x="2" y="2" width="14" height="14" rx="2"/>
+        <path d="M5 6h8M5 9h8M5 12h5"/>
+      </svg>
+    ),
+    strategy: (
+      <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <path d="M2 14l5-5 3 3 6-8"/>
+      </svg>
+    ),
+    settings: (
+      <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <circle cx="9" cy="9" r="2.5"/>
+        <path d="M9 1v2M9 15v2M1 9h2M15 9h2M3.5 3.5l1.5 1.5M13 13l1.5 1.5M13 3.5 11.5 5M4.5 13l-1.5 1.5"/>
+      </svg>
+    ),
+  };
+  return <svg className="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">{icons[id]?.props?.children}</svg>;
+}
+
+function Sidebar() {
+  const [active, setActive] = useState('qa');
+  return (
+    <div className="sidebar">
+      <div className="sidebar-logo">
+        <div className="logo-mark">OA</div>
+        <div>
+          <div className="logo-text">OptionsAji</div>
+          <div className="logo-sub">期权阿吉</div>
+        </div>
+      </div>
+
+      <div className="sidebar-nav">
+        {NAV_ITEMS.map(item => (
+          <div key={item.id} className={`nav-item ${active === item.id ? 'active' : ''}`}
+            onClick={() => setActive(item.id)}>
+            <NavIcon id={item.id} />
+            <span>{item.label}</span>
+            {item.badge && <span className="nav-badge">{item.badge}</span>}
+          </div>
+        ))}
+      </div>
+
+      <div className="sidebar-plan">
+        <div className="plan-badge">
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="var(--gold)">
+            <polygon points="5,0 6.5,3.5 10,4 7.5,6.5 8,10 5,8.5 2,10 2.5,6.5 0,4 3.5,3.5"/>
+          </svg>
+          Pro Plan
+        </div>
+        <div className="usage-text">今日问答：12 / ∞ 次</div>
+        <div className="usage-bar-bg"><div className="usage-bar-fill" style={{ width: '8%' }} /></div>
+      </div>
+
+      <div className="sidebar-user">
+        <div className="user-avatar">张</div>
+        <div>
+          <div className="user-name">张小明</div>
+          <div className="user-plan">Pro · 活跃至 12/31</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Right Panel ── */
+const sparkData = [548.1, 545.8, 547.2, 543.9, 546.5, 549.1, 547.8, 551.2, 548.6, 550.3, 547.9, 549.8, 548.3, 550.1, 548.32];
+const NEWS = [
+  { headline: 'Fed officials signal fewer rate cuts in 2025 amid persistent inflation data', source: 'Bloomberg · 12分钟前', sentiment: 'bear' },
+  { headline: 'SPY options market shows unusual call buying activity above $555 strike', source: 'Unusual Whales · 28分钟前', sentiment: 'bull' },
+  { headline: 'VIX term structure flattens ahead of FOMC; traders brace for volatility', source: 'Reuters · 45分钟前', sentiment: 'neutral' },
+];
+
+function RightPanel({ collapsed, onToggle }) {
+  return (
+    <div className="right-panel" style={{ width: collapsed ? 0 : 300 }}>
+      {!collapsed && (
+        <div className="right-panel-inner">
+          <div className="panel-section">
+            <div className="panel-section-title">
+              <div className="live-dot" />
+              实时数据 · SPY
+            </div>
+            <div className="ticker-header">
+              <span className="ticker-price">$548.32</span>
+              <span className="ticker-change pos">▲ 0.8%</span>
+            </div>
+            <div className="sparkline-wrap">
+              <Sparkline data={sparkData} positive={true} />
+            </div>
+            <div className="iv-grid">
+              <div className="iv-item">
+                <div className="iv-label">ATM IV</div>
+                <div className="iv-val">18.5%</div>
+              </div>
+              <div className="iv-item">
+                <div className="iv-label">IV Rank</div>
+                <div className="iv-val">35<span style={{ fontSize: 10, color: 'var(--muted)' }}>%ile</span></div>
+              </div>
+              <div className="iv-item">
+                <div className="iv-label">Put/Call</div>
+                <div className="iv-val">0.85</div>
+              </div>
+              <div className="iv-item">
+                <div className="iv-label">GEX</div>
+                <div className="iv-val" style={{ color: 'var(--green)' }}>+2.1B</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="panel-section" style={{ padding: '12px 14px 8px' }}>
+            <div className="panel-section-title">相关资讯</div>
+          </div>
+          <div className="news-scroll">
+            {NEWS.map((n, i) => (
+              <div key={i} className="news-item">
+                <div className={`news-sentiment ${n.sentiment}`}>
+                  {n.sentiment === 'bull' && '● 看涨'}
+                  {n.sentiment === 'bear' && '● 看跌'}
+                  {n.sentiment === 'neutral' && '● 中性'}
+                </div>
+                <div className="news-headline">{n.headline}</div>
+                <div className="news-source">{n.source}</div>
+              </div>
+            ))}
+            <div className="news-footer">
+              <span className="news-more">查看全部新闻 →</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Typing simulation ── */
+function useTypewriter(text, speed = 12) {
+  const [displayed, setDisplayed] = useState('');
+  useEffect(() => {
+    setDisplayed('');
+    if (!text) return;
+    let i = 0;
+    const id = setInterval(() => {
+      i++;
+      setDisplayed(text.slice(0, i));
+      if (i >= text.length) clearInterval(id);
+    }, speed);
+    return () => clearInterval(id);
+  }, [text]);
+  return displayed;
+}
+
+/* ── Pre-built conversation ── */
+const INITIAL_MESSAGES = [
+  {
+    id: 1, role: 'user',
+    text: 'SPY 现在的 GEX 环境怎么样？适合做什么策略？',
+    time: '14:32',
+  },
+  {
+    id: 2, role: 'ai',
+    time: '14:32',
+    showThinkDone: true,
+    thinkSteps: [
+      { label: '拉取 SPY 实时 GEX 数据...', state: 'done' },
+      { label: '检查宏观日历与新闻事件...', state: 'done' },
+      { label: '生成策略建议...', state: 'done' },
+    ],
+    content: (
+      <div>
+        <div className="ai-para">
+          目前 <span className="ai-highlight">SPY</span> 处于 <span className="ai-green">正 Gamma（Positive GEX）</span> 环境，做市商总体持有净 long gamma 仓位。
+        </div>
+        <GEXCard ticker="SPY" />
+        <div className="ai-para">
+          在正 Gamma 环境下，做市商的 delta 对冲行为会 <span className="ai-bold">压制价格波动</span>——当 SPY 上涨，他们卖出对冲；当下跌，他们买入对冲。这形成了一个天然的"价格橡皮筋"效应，使 SPY 倾向于在 <span className="ai-highlight">538–555</span> 区间内震荡。
+        </div>
+        <hr className="ai-divider" />
+        <div className="ai-para" style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>基于当前市场环境，推荐策略：</div>
+        <StrategyCard />
+        <div className="ai-para" style={{ marginTop: 10, fontSize: 13, color: 'var(--muted)' }}>
+          如需调整参数或了解其他策略（Iron Condor / Butterfly），直接告诉我。
+        </div>
+      </div>
+    ),
+  },
+  {
+    id: 3, role: 'user',
+    text: '如果 Trump 突然发关税推文怎么办？',
+    time: '14:35',
+  },
+  {
+    id: 4, role: 'ai',
+    time: '14:35',
+    showThinkDone: true,
+    thinkSteps: [
+      { label: '扫描 @realDonaldTrump 最新动态...', state: 'done' },
+      { label: '评估 GEX Flip 风险...', state: 'done' },
+      { label: '生成 hedge 建议...', state: 'done' },
+    ],
+    content: (
+      <div>
+        <div className="ai-para" style={{ color: 'var(--red)', fontSize: 13, fontWeight: 600, marginBottom: 6 }}>
+          ⚠️ 检测到相关风险事件——刚好有一条模拟推文：
+        </div>
+        <TweetCard />
+        <div className="ai-para" style={{ marginTop: 10 }}>
+          如果此类关税推文出现，SPY 的 GEX 环境会迅速从 <span className="ai-green">正 Gamma</span> 切换为 <span className="ai-red">负 Gamma（Negative GEX）</span>。
+          在负 Gamma 下，做市商需要 <span className="ai-bold">顺势对冲</span>：价格跌，他们也卖；这会 <span className="ai-red">加速下跌</span>，极端情况下可能一日跌穿多个关键支撑。
+        </div>
+        <div className="ai-para">建议你立即做以下调整：</div>
+        <div style={{ background: 'rgba(255,107,107,0.06)', border: '1px solid rgba(255,107,107,0.2)', borderRadius: 8, padding: '10px 12px', fontSize: 13, lineHeight: 1.7 }}>
+          <div>① <span className="ai-bold">提前平仓</span> Credit Put Spread 的卖腿（Sell 540P），锁定已有利润</div>
+          <div>② 买入 <span className="ai-red">535P</span> 或 <span className="ai-red">530P</span> 作为 tail hedge，成本约为权利金的 15–20%</div>
+          <div>③ 观察 <span className="ai-highlight">SPY 543</span>（γ Flip）是否被跌穿——跌穿则波动率将显著扩大</div>
+        </div>
+        <div className="ai-para" style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>
+          需要我帮你计算 hedge 的最优比例或评估当前持仓的 P&L 情景吗？
+        </div>
+      </div>
+    ),
+  },
+];
+
+/* ── Chat Area ── */
+const TICKERS = ['SPY', 'QQQ', 'AAPL', 'TSLA', 'NVDA', 'AMZN', 'META'];
+const MODES = ['快速问答', '深度分析', '策略评估'];
+const CHIPS = ['GEX 分析', '策略推荐', '持仓评估', '解释概念', 'IV 分析', '风险评估'];
+
+const AI_THINK_STEPS_DEFAULT = [
+  { label: '获取实时市场数据...', state: 'active' },
+  { label: '分析 GEX 与期权链...', state: 'pending' },
+  { label: '生成分析与建议...', state: 'pending' },
+];
+
+function ChatArea({ rightCollapsed, onToggleRight }) {
+  const [ticker, setTicker] = useState('SPY');
+  const [mode, setMode] = useState(0);
+  const [messages, setMessages] = useState(INITIAL_MESSAGES);
+  const [input, setInput] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [thinkingMsgId, setThinkingMsgId] = useState(null);
+  const [thinkSteps, setThinkSteps] = useState([]);
+  const bottomRef = useRef(null);
+  const inputRef = useRef(null);
+  const msgIdRef = useRef(100);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, thinkSteps]);
+
+  const sendMessage = useCallback(async (text) => {
+    if (!text.trim() || isGenerating) return;
+    const userMsg = { id: msgIdRef.current++, role: 'user', text, time: new Date().toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' }) };
+    setMessages(m => [...m, userMsg]);
+    setInput('');
+    setIsGenerating(true);
+
+    // Build thinking ID
+    const aiId = msgIdRef.current++;
+    setThinkingMsgId(aiId);
+
+    // Animate think steps
+    const steps = [
+      { label: '拉取实时 GEX 与期权链数据...', state: 'active' },
+      { label: '检索相关新闻与宏观事件...', state: 'pending' },
+      { label: '生成分析建议...', state: 'pending' },
+    ];
+    setThinkSteps([...steps]);
+
+    await new Promise(r => setTimeout(r, 1100));
+    steps[0] = { ...steps[0], state: 'done' };
+    steps[1] = { ...steps[1], state: 'active' };
+    setThinkSteps([...steps]);
+
+    await new Promise(r => setTimeout(r, 900));
+    steps[1] = { ...steps[1], state: 'done' };
+    steps[2] = { ...steps[2], state: 'active' };
+    setThinkSteps([...steps]);
+
+    await new Promise(r => setTimeout(r, 800));
+    steps[2] = { ...steps[2], state: 'done' };
+    setThinkSteps([...steps]);
+    await new Promise(r => setTimeout(r, 300));
+
+    // Add AI response
+    const aiMsg = {
+      id: aiId, role: 'ai',
+      time: new Date().toLocaleTimeString('zh', { hour: '2-digit', minute: '2-digit' }),
+      showThinkDone: true,
+      thinkSteps: steps,
+      content: (
+        <div>
+          <div className="ai-para">
+            关于"<span className="ai-highlight">{text}</span>"——根据当前 <span className="ai-highlight">{ticker}</span> 数据，正 Gamma 环境持续，整体波动被压制在 538–555 区间。
+          </div>
+          <div className="ai-para">
+            IV Rank 当前 <span className="ai-green">35%ile</span>，属于偏低水平，卖方策略性价比较高。若 IV 进一步回落，可考虑加大 theta 收割比例。关注下周 FOMC 前后的 IV 变化。
+          </div>
+          <div className="ai-para" style={{ fontSize: 12, color: 'var(--muted)' }}>
+            需要我为这个问题做更深入的分析，或展示具体的期权链数据？
+          </div>
+        </div>
+      ),
+    };
+    setMessages(m => [...m, aiMsg]);
+    setThinkingMsgId(null);
+    setThinkSteps([]);
+    setIsGenerating(false);
+  }, [isGenerating, ticker]);
+
+  const handleKey = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); }
+  };
+
+  const newChat = () => {
+    setMessages([]);
+    setInput('');
+    setIsGenerating(false);
+    setThinkingMsgId(null);
+    setThinkSteps([]);
+    inputRef.current?.focus();
+  };
+
+  return (
+    <div className="chat-area">
+      {/* Toolbar */}
+      <div className="chat-toolbar">
+        <select className="ticker-select" value={ticker} onChange={e => setTicker(e.target.value)}>
+          {TICKERS.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <div className="mode-tabs">
+          {MODES.map((m, i) => (
+            <div key={m} className={`mode-tab ${mode === i ? 'active' : ''}`} onClick={() => setMode(i)}>{m}</div>
+          ))}
+        </div>
+        <div className="toolbar-spacer" />
+        <button className="new-chat-btn" onClick={newChat}>
+          <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">
+            <path d="M6 1v10M1 6h10"/>
+          </svg>
+          新对话
+        </button>
+        <button className="collapse-btn" onClick={onToggleRight} title={rightCollapsed ? '展开右栏' : '收起右栏'}>
+          {rightCollapsed ? '◁' : '▷'}
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div className="messages-container">
+        {messages.length === 0 && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, opacity: 0.5 }}>
+            <div style={{ fontSize: 36 }}>◈</div>
+            <div style={{ fontSize: 15, color: 'var(--muted)' }}>问任何期权问题，AI 实时分析</div>
+          </div>
+        )}
+        {messages.map(msg =>
+          msg.role === 'user'
+            ? <UserMessage key={msg.id} msg={msg} />
+            : <AIMessage key={msg.id} msg={msg} isThinking={false} />
+        )}
+        {/* Thinking placeholder */}
+        {isGenerating && thinkingMsgId && (
+          <div className="msg-row ai slide-left">
+            <div className="ai-avatar">A</div>
+            <div className="ai-content">
+              <div className="ai-bubble">
+                <ThinkingSteps steps={thinkSteps} />
+              </div>
+            </div>
+          </div>
+        )}
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input */}
+      <div className="input-area">
+        <div className="quick-chips">
+          {CHIPS.map(c => (
+            <button key={c} className="chip" onClick={() => { setInput(c + '：'); inputRef.current?.focus(); }}>{c}</button>
+          ))}
+        </div>
+        <div className="input-row">
+          <textarea
+            ref={inputRef}
+            className="input-box"
+            placeholder={`问 ${ticker} 任何期权问题...`}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={handleKey}
+            rows={1}
+          />
+          <button className="send-btn" onClick={() => sendMessage(input)} disabled={isGenerating || !input.trim()}>
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+              <path d="M2 9l14-7-7 14V9H2z" fill="currentColor"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Tweaks ── */
+function TweaksWrapper() {
+  const [tweaks, setTweak] = useTweaks(/*EDITMODE-BEGIN*/{
+    "accentColor": "#D4AF37",
+    "panelStyle": "terminal",
+    "showThinkSteps": true,
+    "fontSize": 14
+  }/*EDITMODE-END*/);
+
+  useEffect(() => {
+    document.documentElement.style.setProperty('--gold', tweaks.accentColor);
+    document.documentElement.style.setProperty('--gold-dim', tweaks.accentColor + '1e');
+    document.documentElement.style.setProperty('--border', tweaks.accentColor + '26');
+    const base = tweaks.panelStyle === 'warm'
+      ? { '--panel2': '#0f1520', '--panel': '#141e30' }
+      : tweaks.panelStyle === 'darker'
+      ? { '--panel2': '#080d16', '--panel': '#0c1522' }
+      : { '--panel2': '#0D1829', '--panel': '#111D2E' };
+    Object.entries(base).forEach(([k, v]) => document.documentElement.style.setProperty(k, v));
+    document.documentElement.style.setProperty('font-size', tweaks.fontSize + 'px');
+  }, [tweaks]);
+
+  return (
+    <TweaksPanel>
+      <TweakSection title="品牌色">
+        <TweakColor label="主强调色" value={tweaks.accentColor} onChange={v => setTweak('accentColor', v)} />
+      </TweakSection>
+      <TweakSection title="面板风格">
+        <TweakRadio label="背景深度" value={tweaks.panelStyle} options={['terminal','warm','darker']} onChange={v => setTweak('panelStyle', v)} />
+      </TweakSection>
+      <TweakSection title="字体">
+        <TweakSlider label="字号" value={tweaks.fontSize} min={12} max={16} step={0.5} onChange={v => setTweak('fontSize', v)} />
+      </TweakSection>
+    </TweaksPanel>
+  );
+}
+
+/* ── App ── */
+function App() {
+  const [rightCollapsed, setRightCollapsed] = useState(false);
+  return (
+    <div className={`app-shell ${rightCollapsed ? 'right-collapsed' : ''}`}>
+      <Sidebar />
+      <ChatArea rightCollapsed={rightCollapsed} onToggleRight={() => setRightCollapsed(c => !c)} />
+      <RightPanel collapsed={rightCollapsed} onToggle={() => setRightCollapsed(c => !c)} />
+      <TweaksWrapper />
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>

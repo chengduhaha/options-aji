@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OptionsAji — GEX Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+<style>
+:root {
+  --bg:#0A1628; --panel:#111D2E; --panel2:#0D1829;
+  --border:rgba(212,175,55,.15); --border2:rgba(255,255,255,.06);
+  --gold:#D4AF37; --gold-dim:rgba(212,175,55,.10);
+  --green:#00D4AA; --red:#FF6B6B;
+  --text:#E8E6E0; --muted:#8B8D97;
+  --mono:'JetBrains Mono',monospace; --ui:'Space Grotesk',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body,#root{height:100%;overflow:hidden}
+body{font-family:var(--ui);background:var(--bg);color:var(--text)}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:rgba(212,175,55,.2);border-radius:2px}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+@keyframes goldGlow{0%,100%{box-shadow:0 0 0 0 rgba(212,175,55,0)}50%{box-shadow:0 0 18px 2px rgba(212,175,55,.15)}}
+
+.fu{animation:fadeUp .4s ease forwards}
+.shell{display:grid;grid-template-columns:240px 1fr;height:100vh;overflow:hidden}
+
+/* Sidebar */
+.sb{background:var(--panel2);border-right:1px solid var(--border2);display:flex;flex-direction:column}
+.sb-logo{padding:18px 16px 14px;border-bottom:1px solid var(--border2);display:flex;align-items:center;gap:10px}
+.lm{width:32px;height:32px;background:linear-gradient(135deg,#D4AF37,#a8832a);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#0A1628;flex-shrink:0}
+.lt{font-size:15px;font-weight:600}.ls{font-size:10px;color:var(--muted)}
+.sb-nav{flex:1;padding:10px 8px;overflow-y:auto}
+.ni{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:7px;cursor:pointer;margin-bottom:2px;font-size:13.5px;color:var(--muted);border:1px solid transparent;transition:all .15s;user-select:none}
+.ni:hover{background:rgba(255,255,255,.04);color:var(--text)}
+.ni.on{background:var(--gold-dim);border-color:var(--border);color:var(--gold)}
+.nic{width:16px;height:16px;flex-shrink:0}
+.nb{margin-left:auto;background:var(--gold);color:#0A1628;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px}
+.sb-foot{padding:10px 14px;border-top:1px solid var(--border2)}
+.pb{display:inline-flex;align-items:center;gap:5px;background:var(--gold-dim);border:1px solid var(--border);padding:3px 8px;border-radius:5px;font-size:11px;font-weight:600;color:var(--gold);margin-bottom:3px}
+.sb-user{padding:10px 14px;border-top:1px solid var(--border2);display:flex;align-items:center;gap:10px}
+.uav{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#2a4a6a,#1a3a5a);border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:var(--gold);flex-shrink:0}
+
+/* Main */
+.main{display:flex;flex-direction:column;overflow:hidden;background:var(--bg)}
+.topbar{padding:10px 18px;border-bottom:1px solid var(--border2);background:var(--panel2);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.ttabs{display:flex;gap:2px}
+.tt{padding:5px 14px;font-size:12.5px;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all .15s;font-weight:500}
+.tt.on{color:var(--gold);border-bottom-color:var(--gold)}
+.tt:hover:not(.on){color:var(--text)}
+.exp-sel{background:var(--panel);border:1px solid var(--border2);color:var(--text);padding:5px 10px;border-radius:6px;font-family:var(--ui);font-size:12px;cursor:pointer;outline:none}
+.dvv{width:1px;height:20px;background:var(--border2)}
+.upd{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.ld{width:5px;height:5px;border-radius:50%;background:var(--green);animation:pulse 1.5s ease infinite}
+.rbtn{width:26px;height:26px;border-radius:5px;background:transparent;border:1px solid var(--border2);color:var(--muted);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s}
+.rbtn:hover{border-color:var(--border);color:var(--gold)}
+.tbs{flex:1}
+.rc{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:20px;font-size:11.5px;font-weight:600}
+.rc.pos{background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.3);color:var(--green)}
+
+.content{flex:1;overflow-y:auto;padding:14px 18px;display:flex;flex-direction:column;gap:12px}
+.mrow{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;flex-shrink:0}
+.mc{background:var(--panel);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;transition:border-color .2s}
+.mc:hover{border-color:var(--border)}
+.mcl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;display:flex;align-items:center;gap:5px}
+.mcv{font-family:var(--mono);font-size:22px;font-weight:600;line-height:1}
+.mcv.g{color:var(--green)}.mcv.gold{color:var(--gold)}.mcv.w{color:var(--text)}
+.mcs{font-size:11px;color:var(--muted);margin-top:5px}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:10px;font-size:11px;font-weight:600;margin-top:5px}
+.badge.pos{background:rgba(0,212,170,.12);border:1px solid rgba(0,212,170,.25);color:var(--green)}
+
+.cpanel{background:var(--panel);border:1px solid var(--border2);border-radius:10px;padding:14px 16px;position:relative}
+.ctitle{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between}
+.legend{display:flex;gap:12px}
+.li{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--muted)}
+.ld2{width:8px;height:8px;border-radius:2px;flex-shrink:0}
+
+.brow{display:grid;grid-template-columns:1fr 1.1fr;gap:12px;flex-shrink:0}
+
+/* Strikes table */
+.stbl{width:100%;border-collapse:collapse;font-size:12px}
+.stbl th{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;padding:5px 8px;text-align:right;border-bottom:1px solid var(--border2)}
+.stbl th:first-child{text-align:left}
+.stbl td{padding:5px 8px;text-align:right;font-family:var(--mono);font-size:11.5px;border-bottom:1px solid rgba(255,255,255,.03)}
+.stbl td:first-child{text-align:left;color:var(--text);font-weight:600}
+.stbl tr.cw td{background:rgba(0,212,170,.05)}.stbl tr.cw td:first-child{color:var(--green)}
+.stbl tr.pw td{background:rgba(255,107,107,.05)}.stbl tr.pw td:first-child{color:var(--red)}
+.stbl tr.gf td:first-child{color:var(--gold)}
+.stbl tr:hover td{background:rgba(255,255,255,.02)}
+
+/* Tooltip */
+.gtt{position:fixed;background:#0b1828;border:1px solid rgba(212,175,55,.35);border-radius:9px;padding:10px 13px;pointer-events:none;z-index:100;font-family:var(--mono);font-size:11px;min-width:170px;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.gtt-s{font-size:13px;font-weight:600;color:var(--gold);margin-bottom:7px}
+.gtt-r{display:flex;justify-content:space-between;gap:18px;margin-bottom:3px;font-size:11px}
+.gtt-l{color:var(--muted)}.gtt-v{font-weight:600}
+.gtt-v.g{color:var(--green)}.gtt-v.r{color:var(--red)}.gtt-v.w{color:var(--text)}
+
+/* AI card */
+.aicard{background:rgba(212,175,55,.05);border:1px solid rgba(212,175,55,.25);border-radius:10px;padding:12px 16px;display:flex;gap:12px;align-items:flex-start;animation:goldGlow 4s ease infinite}
+.aico{width:28px;height:28px;border-radius:7px;background:linear-gradient(135deg,#D4AF37,#a8832a);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:#0A1628;flex-shrink:0}
+.ail{font-size:10px;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}
+.ait{font-size:12.5px;color:var(--text);line-height:1.6}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+
+const { useState, useEffect, useRef, useCallback } = React;
+
+/* ── Data ── */
+const GEX_DATA = [
+  {s:520,c:85,p:-210},{s:521,c:38,p:-118},{s:522,c:52,p:-152},{s:523,c:28,p:-88},
+  {s:524,c:60,p:-128},{s:525,c:178,p:-375},{s:526,c:48,p:-112},{s:527,c:42,p:-95},
+  {s:528,c:68,p:-142},{s:529,c:32,p:-78},{s:530,c:218,p:-505},{s:531,c:52,p:-102},
+  {s:532,c:58,p:-128},{s:533,c:38,p:-85},{s:534,c:72,p:-168},{s:535,c:168,p:-415},
+  {s:536,c:62,p:-132},{s:537,c:78,p:-158},{s:538,c:88,p:-678},{s:539,c:72,p:-238},
+  {s:540,c:208,p:-518},{s:541,c:92,p:-198},{s:542,c:108,p:-182},{s:543,c:182,p:-188},
+  {s:544,c:172,p:-152},{s:545,c:375,p:-275},{s:546,c:192,p:-142},{s:547,c:208,p:-128},
+  {s:548,c:258,p:-112},{s:549,c:218,p:-82},{s:550,c:615,p:-208},{s:551,c:238,p:-72},
+  {s:552,c:252,p:-58},{s:553,c:198,p:-52},{s:554,c:212,p:-42},{s:555,c:845,p:-128},
+  {s:556,c:182,p:-32},{s:557,c:158,p:-25},{s:558,c:142,p:-20},{s:559,c:128,p:-16},
+  {s:560,c:405,p:-62},{s:561,c:108,p:-12},{s:562,c:92,p:-10},{s:563,c:82,p:-8},
+  {s:564,c:72,p:-7},{s:565,c:275,p:-38},{s:566,c:52,p:-5},{s:567,c:42,p:-4},
+  {s:568,c:38,p:-4},{s:569,c:32,p:-3},{s:570,c:175,p:-22},
+].map(d => ({ strike: d.s, callGex: d.c, putGex: d.p, netGex: d.c + d.p,
+  oi: Math.round((d.c + Math.abs(d.p)) * 180 + (d.s%5===0?15000:3000)),
+  vol: Math.round((d.c + Math.abs(d.p)) * 45 + (d.s%5===0?4000:800)) }));
+
+const TREND = [
+  {day:'4/21',v:-0.82},{day:'4/22',v:-0.35},{day:'4/23',v:0.18},
+  {day:'4/24',v:0.95},{day:'4/25',v:1.62},{day:'4/26',v:2.10},
+];
+
+const TOP_STRIKES = [...GEX_DATA]
+  .sort((a,b) => Math.abs(b.netGex)-Math.abs(a.netGex))
+  .slice(0,10)
+  .sort((a,b) => b.strike-a.strike);
+
+const PRICE=548.32, FLIP=543, CALL_WALL=555, PUT_WALL=538, MAX_PAIN=545;
+
+/* ── SVG GEX Bar Chart ── */
+function GEXChart({ data }) {
+  const containerRef = useRef(null);
+  const [width, setWidth] = useState(800);
+  const [tooltip, setTooltip] = useState(null);
+
+  useEffect(() => {
+    const obs = new ResizeObserver(e => setWidth(e[0].contentRect.width));
+    if (containerRef.current) obs.observe(containerRef.current);
+    return () => obs.disconnect();
+  }, []);
+
+  const H = 260, ML = 58, MR = 90, MT = 28, MB = 32;
+  const PW = Math.max(width - ML - MR, 1);
+  const PH = H - MT - MB;
+
+  const n = data.length;
+  const maxC = Math.max(...data.map(d => d.callGex));
+  const maxP = Math.max(...data.map(d => Math.abs(d.putGex)));
+  const yMax = Math.ceil(Math.max(maxC, maxP) / 100) * 100 + 50;
+  const yMin = -yMax;
+  const yRange = yMax - yMin;
+
+  const toX = i => ML + (i + 0.5) * (PW / n);
+  const toY = v => MT + PH - ((v - yMin) / yRange) * PH;
+  const barW = Math.max((PW / n) * 0.38, 2);
+
+  // Y axis ticks
+  const yTicks = [];
+  for (let v = -800; v <= 900; v += 200) {
+    if (v >= yMin && v <= yMax) yTicks.push(v);
+  }
+
+  // X axis: every 5 strikes
+  const xLabels = data.filter((_, i) => data[i].strike % 5 === 0);
+
+  // Reference line x positions
+  const strikeToX = s => {
+    const idx = data.findIndex(d => d.strike === s);
+    return idx >= 0 ? toX(idx) : toX((s - data[0].strike));
+  };
+  const priceX = ML + ((PRICE - data[0].strike) / (data[data.length-1].strike - data[0].strike)) * PW;
+
+  const handleMouseMove = (e) => {
+    const rect = containerRef.current?.querySelector('svg')?.getBoundingClientRect();
+    if (!rect) return;
+    const mx = e.clientX - rect.left - ML;
+    const idx = Math.round(mx / (PW / n) - 0.5);
+    if (idx >= 0 && idx < data.length) {
+      setTooltip({ d: data[idx], x: e.clientX, y: e.clientY });
+    }
+  };
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative' }}
+      onMouseMove={handleMouseMove} onMouseLeave={() => setTooltip(null)}>
+      <svg width={width} height={H} style={{ display: 'block', overflow: 'visible' }}>
+        <defs>
+          <linearGradient id="callGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#00D4AA" stopOpacity="0.9"/>
+            <stop offset="100%" stopColor="#00D4AA" stopOpacity="0.6"/>
+          </linearGradient>
+          <linearGradient id="putGrad" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0%" stopColor="#FF6B6B" stopOpacity="0.9"/>
+            <stop offset="100%" stopColor="#FF6B6B" stopOpacity="0.6"/>
+          </linearGradient>
+        </defs>
+
+        {/* Grid lines */}
+        {yTicks.map(v => (
+          <line key={v} x1={ML} x2={ML+PW} y1={toY(v)} y2={toY(v)}
+            stroke="rgba(255,255,255,0.04)" strokeWidth={v===0?1.5:0.8}
+            strokeDasharray={v===0?'none':'2 3'}/>
+        ))}
+
+        {/* Y axis labels */}
+        {yTicks.map(v => (
+          <text key={v} x={ML-6} y={toY(v)+4} textAnchor="end"
+            fill="#8B8D97" fontSize={9} fontFamily="JetBrains Mono">
+            {v===0?'0':`${v>0?'+':''}${v}M`}
+          </text>
+        ))}
+
+        {/* X axis labels */}
+        {xLabels.map((d,i) => {
+          const idx = data.findIndex(dd => dd.strike === d.strike);
+          return (
+            <text key={d.strike} x={toX(idx)} y={H-MB+14} textAnchor="middle"
+              fill="#8B8D97" fontSize={9} fontFamily="JetBrains Mono">{d.strike}</text>
+          );
+        })}
+
+        {/* Bars */}
+        {data.map((d, i) => {
+          const x = toX(i);
+          const y0 = toY(0);
+          return (
+            <g key={d.strike}>
+              {/* Call bar */}
+              {d.callGex > 0 && (
+                <rect x={x - barW - 0.5} y={toY(d.callGex)} width={barW}
+                  height={y0 - toY(d.callGex)} fill="url(#callGrad)" rx={1}/>
+              )}
+              {/* Put bar */}
+              {d.putGex < 0 && (
+                <rect x={x + 0.5} y={y0} width={barW}
+                  height={toY(d.putGex) - y0} fill="url(#putGrad)" rx={1}/>
+              )}
+            </g>
+          );
+        })}
+
+        {/* Zero line */}
+        <line x1={ML} x2={ML+PW} y1={toY(0)} y2={toY(0)} stroke="rgba(255,255,255,0.15)" strokeWidth={1}/>
+
+        {/* Reference: Gamma Flip */}
+        {(() => { const x = strikeToX(FLIP); return (
+          <g>
+            <line x1={x} x2={x} y1={MT} y2={MT+PH} stroke="#D4AF37" strokeWidth={1.5}/>
+            <rect x={x-2} y={MT-20} width={80} height={15} fill="#0A1628"/>
+            <text x={x+3} y={MT-8} fill="#D4AF37" fontSize={9} fontFamily="JetBrains Mono" fontWeight="600">γ Flip {FLIP}</text>
+          </g>
+        );})()}
+
+        {/* Reference: Current Price */}
+        {(() => { const x = priceX; return (
+          <g>
+            <line x1={x} x2={x} y1={MT} y2={MT+PH} stroke="#D4AF37" strokeWidth={1.5} strokeDasharray="5 3"/>
+            <rect x={x-2} y={MT+4} width={95} height={15} fill="#0A1628"/>
+            <text x={x+4} y={MT+15} fill="#D4AF37" fontSize={9} fontFamily="JetBrains Mono" fontWeight="600">SPY ${PRICE}</text>
+          </g>
+        );})()}
+
+        {/* Reference: Call Wall */}
+        {(() => { const x = strikeToX(CALL_WALL); return (
+          <g>
+            <line x1={x} x2={x} y1={MT} y2={MT+PH} stroke="#00D4AA" strokeWidth={1} strokeDasharray="4 3"/>
+            <text x={x+4} y={MT+PH-4} fill="#00D4AA" fontSize={9} fontFamily="JetBrains Mono" fontWeight="600">Call Wall {CALL_WALL}</text>
+          </g>
+        );})()}
+
+        {/* Reference: Put Wall */}
+        {(() => { const x = strikeToX(PUT_WALL); return (
+          <g>
+            <line x1={x} x2={x} y1={MT} y2={MT+PH} stroke="#FF6B6B" strokeWidth={1} strokeDasharray="4 3"/>
+            <text x={x+4} y={MT+8} fill="#FF6B6B" fontSize={9} fontFamily="JetBrains Mono" fontWeight="600">Put Wall {PUT_WALL}</text>
+          </g>
+        );})()}
+
+        {/* Tooltip hover highlight */}
+        {tooltip && (() => {
+          const idx = data.findIndex(d => d.strike === tooltip.d.strike);
+          const x = toX(idx);
+          return <line x1={x} x2={x} y1={MT} y2={MT+PH} stroke="rgba(212,175,55,0.25)" strokeWidth={barW*3}/>;
+        })()}
+      </svg>
+
+      {/* Floating tooltip */}
+      {tooltip && (
+        <div className="gtt" style={{ left: tooltip.x + 14, top: tooltip.y - 60 }}>
+          <div className="gtt-s">Strike {tooltip.d.strike}</div>
+          <div className="gtt-r"><span className="gtt-l">Call GEX</span><span className="gtt-v g">+{tooltip.d.callGex}M</span></div>
+          <div className="gtt-r"><span className="gtt-l">Put GEX</span><span className="gtt-v r">{tooltip.d.putGex}M</span></div>
+          <div className="gtt-r"><span className="gtt-l">Net GEX</span><span className={`gtt-v ${tooltip.d.netGex>=0?'g':'r'}`}>{tooltip.d.netGex>0?'+':''}{tooltip.d.netGex}M</span></div>
+          <div className="gtt-r"><span className="gtt-l">Open Int</span><span className="gtt-v w">{tooltip.d.oi.toLocaleString()}</span></div>
+          <div className="gtt-r"><span className="gtt-l">Volume</span><span className="gtt-v w">{tooltip.d.vol.toLocaleString()}</span></div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Trend Area Chart ── */
+function TrendChart() {
+  const containerRef = useRef(null);
+  const [width, setWidth] = useState(400);
+  const [tip, setTip] = useState(null);
+
+  useEffect(() => {
+    const obs = new ResizeObserver(e => setWidth(e[0].contentRect.width));
+    if (containerRef.current) obs.observe(containerRef.current);
+    return () => obs.disconnect();
+  }, []);
+
+  const H=160, ML=38, MR=12, MT=16, MB=28;
+  const PW=Math.max(width-ML-MR,1), PH=H-MT-MB;
+  const yMin=-1.4, yMax=2.6;
+  const toX=i => ML + (i/(TREND.length-1))*PW;
+  const toY=v => MT + PH - ((v-yMin)/(yMax-yMin))*PH;
+  const y0=toY(0);
+
+  // Build path
+  const pts = TREND.map((d,i) => `${toX(i)},${toY(d.v)}`);
+  const linePath = `M ${pts.join(' L ')}`;
+  const posAreaPts = TREND.map((d,i) => ({ x: toX(i), y: toY(Math.max(d.v,0)) }));
+  const negAreaPts = TREND.map((d,i) => ({ x: toX(i), y: toY(Math.min(d.v,0)) }));
+
+  // Positive area
+  const posArea = `M ${posAreaPts[0].x},${y0} ` +
+    posAreaPts.map(p => `L ${p.x},${p.y}`).join(' ') +
+    ` L ${posAreaPts[posAreaPts.length-1].x},${y0} Z`;
+  const negArea = `M ${negAreaPts[0].x},${y0} ` +
+    negAreaPts.map(p => `L ${p.x},${p.y}`).join(' ') +
+    ` L ${negAreaPts[negAreaPts.length-1].x},${y0} Z`;
+
+  const yTicks = [-1, 0, 1, 2];
+
+  const handleMove = e => {
+    const rect = containerRef.current?.querySelector('svg')?.getBoundingClientRect();
+    if (!rect) return;
+    const mx = e.clientX - rect.left - ML;
+    const idx = Math.min(Math.max(Math.round(mx / (PW/(TREND.length-1))),0), TREND.length-1);
+    setTip({ d: TREND[idx], x: e.clientX, y: e.clientY, i: idx });
+  };
+
+  return (
+    <div ref={containerRef} style={{ position: 'relative' }}
+      onMouseMove={handleMove} onMouseLeave={() => setTip(null)}>
+      <svg width={width} height={H} style={{ display:'block', overflow:'visible' }}>
+        <defs>
+          <linearGradient id="posGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#00D4AA" stopOpacity="0.25"/>
+            <stop offset="100%" stopColor="#00D4AA" stopOpacity="0"/>
+          </linearGradient>
+          <linearGradient id="negGrad" x1="0" y1="1" x2="0" y2="0">
+            <stop offset="0%" stopColor="#FF6B6B" stopOpacity="0.2"/>
+            <stop offset="100%" stopColor="#FF6B6B" stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        {/* Grid */}
+        {yTicks.map(v => (
+          <g key={v}>
+            <line x1={ML} x2={ML+PW} y1={toY(v)} y2={toY(v)}
+              stroke={v===0?"rgba(255,255,255,0.15)":"rgba(255,255,255,0.04)"}
+              strokeWidth={v===0?1:0.8} strokeDasharray={v===0?"none":"2 3"}/>
+            <text x={ML-5} y={toY(v)+4} textAnchor="end" fill="#8B8D97" fontSize={9} fontFamily="JetBrains Mono">
+              {v>=0?`+${v}B`:`${v}B`}
+            </text>
+          </g>
+        ))}
+        {/* X labels */}
+        {TREND.map((d,i) => (
+          <text key={i} x={toX(i)} y={H-MB+14} textAnchor="middle" fill="#8B8D97" fontSize={9} fontFamily="JetBrains Mono">{d.day}</text>
+        ))}
+        {/* Areas */}
+        <path d={posArea} fill="url(#posGrad)"/>
+        <path d={negArea} fill="url(#negGrad)"/>
+        {/* Line */}
+        <path d={linePath} fill="none" stroke="#00D4AA" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"/>
+        {/* Regime change annotation */}
+        <line x1={toX(2)} x2={toX(2)} y1={MT} y2={MT+PH} stroke="rgba(212,175,55,0.3)" strokeWidth={1} strokeDasharray="3 2"/>
+        <text x={toX(2)+4} y={MT+10} fill="#D4AF37" fontSize={8.5} fontFamily="JetBrains Mono">Regime 转正</text>
+        {/* Dots */}
+        {TREND.map((d,i) => (
+          <circle key={i} cx={toX(i)} cy={toY(d.v)} r={3} fill={d.v>=0?"#00D4AA":"#FF6B6B"} stroke="var(--panel)" strokeWidth={1.5}/>
+        ))}
+        {/* Hover dot */}
+        {tip && (
+          <circle cx={toX(tip.i)} cy={toY(tip.d.v)} r={5} fill={tip.d.v>=0?"#00D4AA":"#FF6B6B"} stroke="var(--panel)" strokeWidth={2}/>
+        )}
+      </svg>
+      {tip && (
+        <div className="gtt" style={{ left: tip.x+12, top: tip.y-50, minWidth:130 }}>
+          <div className="gtt-s">{tip.d.day}</div>
+          <div className="gtt-r">
+            <span className="gtt-l">Net GEX</span>
+            <span className={`gtt-v ${tip.d.v>=0?'g':'r'}`}>{tip.d.v>=0?'+':''}{tip.d.v}B</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Sidebar ── */
+const NAV=[
+  {id:'qa',label:'AI 问答'},
+  {id:'gex',label:'GEX Dashboard'},
+  {id:'sig',label:'信号中心',badge:'3'},
+  {id:'news',label:'新闻流'},
+  {id:'strat',label:'策略评估'},
+  {id:'set',label:'设置'},
+];
+function SBIcon({id}){
+  const paths={
+    qa:'M1 2h14v9H8l-4 3V11H1V2z',
+    gex:null, sig:null, news:'M1 1h14v14H1zM4 5h8M4 8h8M4 11h5',
+    strat:'M2 14l5-5 3 3 6-8', set:null,
+  };
+  if(id==='gex') return <svg className="nic" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><rect x="1" y="9" width="3" height="6" rx="1"/><rect x="6" y="5" width="3" height="10" rx="1"/><rect x="11" y="1" width="3" height="14" rx="1"/></svg>;
+  if(id==='sig') return <svg className="nic" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d="M8 1v2M8 13v2M1 8h2M13 8h2"/><circle cx="8" cy="8" r="2.5"/></svg>;
+  if(id==='set') return <svg className="nic" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><circle cx="8" cy="8" r="2.2"/><path d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15"/></svg>;
+  return <svg className="nic" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"><path d={paths[id]||'M2 14l5-5 3 3 6-8'}/></svg>;
+}
+function Sidebar(){
+  const [active,setActive]=useState('gex');
+  return (
+    <div className="sb">
+      <div className="sb-logo"><div className="lm">OA</div><div><div className="lt">OptionsAji</div><div className="ls">期权阿吉</div></div></div>
+      <div className="sb-nav">
+        {NAV.map(n=>(
+          <div key={n.id} className={`ni ${active===n.id?'on':''}`} onClick={()=>setActive(n.id)}>
+            <SBIcon id={n.id}/><span>{n.label}</span>
+            {n.badge&&<span className="nb">{n.badge}</span>}
+          </div>
+        ))}
+      </div>
+      <div className="sb-foot">
+        <div className="pb">
+          <svg width="9" height="9" viewBox="0 0 10 10" fill="var(--gold)"><polygon points="5,0 6.5,3.5 10,4 7.5,6.5 8,10 5,8.5 2,10 2.5,6.5 0,4 3.5,3.5"/></svg>
+          Pro Plan
+        </div>
+        <div style={{fontSize:10,color:'var(--muted)'}}>今日问答：12 / ∞ 次</div>
+      </div>
+      <div className="sb-user">
+        <div className="uav">张</div>
+        <div><div style={{fontSize:12.5,color:'var(--text)',fontWeight:500}}>张小明</div><div style={{fontSize:10,color:'var(--gold)'}}>Pro · 活跃至 12/31</div></div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Tweaks ── */
+function TweaksWrapper(){
+  const [tweaks,setTweak]=useTweaks(/*EDITMODE-BEGIN*/{
+    "accentColor":"#D4AF37",
+    "callColor":"#00D4AA",
+    "putColor":"#FF6B6B"
+  }/*EDITMODE-END*/);
+  useEffect(()=>{
+    document.documentElement.style.setProperty('--gold',tweaks.accentColor);
+    document.documentElement.style.setProperty('--gold-dim',tweaks.accentColor+'1a');
+    document.documentElement.style.setProperty('--border',tweaks.accentColor+'26');
+    document.documentElement.style.setProperty('--green',tweaks.callColor);
+    document.documentElement.style.setProperty('--red',tweaks.putColor);
+  },[tweaks]);
+  return (
+    <TweaksPanel>
+      <TweakSection title="图表颜色">
+        <TweakColor label="强调色 / 金色" value={tweaks.accentColor} onChange={v=>setTweak('accentColor',v)}/>
+        <TweakColor label="Call GEX 颜色" value={tweaks.callColor} onChange={v=>setTweak('callColor',v)}/>
+        <TweakColor label="Put GEX 颜色" value={tweaks.putColor} onChange={v=>setTweak('putColor',v)}/>
+      </TweakSection>
+    </TweaksPanel>
+  );
+}
+
+/* ── App ── */
+function App(){
+  const [ticker,setTicker]=useState('SPY');
+  const [expiry,setExpiry]=useState('all');
+  const [refreshing,setRefreshing]=useState(false);
+  const tickers=['SPY','QQQ','AAPL','TSLA','NVDA'];
+
+  const refresh=()=>{
+    setRefreshing(true);
+    setTimeout(()=>setRefreshing(false),1200);
+  };
+
+  return (
+    <div className="shell">
+      <Sidebar/>
+      <div className="main">
+        {/* Topbar */}
+        <div className="topbar">
+          <div className="ttabs">
+            {tickers.map(t=>(
+              <div key={t} className={`tt ${ticker===t?'on':''}`} onClick={()=>setTicker(t)}>{t}</div>
+            ))}
+          </div>
+          <div className="dvv"/>
+          <select className="exp-sel" value={expiry} onChange={e=>setExpiry(e.target.value)}>
+            <option value="all">All Expirations</option>
+            <option value="week">This Week (5/2)</option>
+            <option value="next">Next Week (5/9)</option>
+            <option value="monthly">Monthly (5/16)</option>
+          </select>
+          <div className="tbs"/>
+          <span className="rc pos">● Positive γ — 低波动</span>
+          <div className="dvv"/>
+          <div className="upd">
+            <div className="ld"/>
+            {refreshing ? '正在刷新...' : 'Updated 2 min ago'}
+          </div>
+          <button className="rbtn" onClick={refresh}>
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round">
+              <path d="M1 6a5 5 0 0 1 9-3M11 6a5 5 0 0 1-9 3"/><path d="M10 3V1M2 9v2"/>
+            </svg>
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="content">
+          {/* Metric cards */}
+          <div className="mrow">
+            {[
+              {label:'Net GEX',val:'+2.1B',cls:'g',sub:'▲ +320M vs 昨日',subCls:{color:'var(--green)'}},
+              {label:'Gamma Flip',val:'543.00',cls:'gold',sub:`当前高于 Flip 位 +${(PRICE-FLIP).toFixed(2)}`},
+              {label:'GEX Regime',val:null,badge:'● Positive γ',sub:'低波动 · 均值回归环境'},
+              {label:'Max Pain',val:'545.00',cls:'w',sub:'到期收敛价位 · 5/2 到期'},
+            ].map((m,i)=>(
+              <div key={i} className="mc fu" style={{animationDelay:`${i*0.08}s`}}>
+                <div className="mcl">
+                  {i===0&&<div style={{width:6,height:6,borderRadius:'50%',background:'var(--green)',animation:'pulse 1.5s infinite'}}/>}
+                  {m.label}
+                </div>
+                {m.val
+                  ? <div className={`mcv ${m.cls}`}>{m.val}</div>
+                  : <span className="badge pos">{m.badge}</span>
+                }
+                <div className="mcs" style={m.subCls||{}}>{m.sub}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Main chart */}
+          <div className="cpanel fu" style={{animationDelay:'0.1s'}}>
+            <div className="ctitle">
+              <span>{ticker} — Gamma Exposure by Strike</span>
+              <div className="legend">
+                <div className="li"><div className="ld2" style={{background:'var(--green)'}}/>Call GEX</div>
+                <div className="li"><div className="ld2" style={{background:'var(--red)'}}/>Put GEX</div>
+                <div className="li" style={{gap:7}}>
+                  <div style={{width:14,borderTop:'1.5px dashed var(--gold)',marginTop:4}}/>当前价格
+                </div>
+              </div>
+            </div>
+            <GEXChart data={GEX_DATA}/>
+          </div>
+
+          {/* Bottom row */}
+          <div className="brow fu" style={{animationDelay:'0.2s'}}>
+            {/* Trend */}
+            <div className="cpanel" style={{height:'100%'}}>
+              <div className="ctitle">
+                <span>Net GEX 5 日趋势</span>
+                <span style={{color:'var(--green)',fontStyle:'normal',fontSize:10}}>↑ Regime 转正于 4/23</span>
+              </div>
+              <TrendChart/>
+            </div>
+            {/* Strikes table */}
+            <div className="cpanel" style={{display:'flex',flexDirection:'column',overflow:'hidden'}}>
+              <div className="ctitle" style={{marginBottom:8}}>
+                <span>Top Strikes by GEX</span>
+                <span style={{fontSize:10,color:'var(--muted)'}}>单位：百万美元</span>
+              </div>
+              <div style={{overflow:'auto',flex:1}}>
+                <table className="stbl">
+                  <thead>
+                    <tr>
+                      <th>Strike</th><th>Call GEX</th><th>Put GEX</th><th>Net</th><th>Open Int</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {TOP_STRIKES.map(row=>{
+                      const isCW=row.strike===CALL_WALL, isPW=row.strike===PUT_WALL, isGF=row.strike===FLIP;
+                      return (
+                        <tr key={row.strike} className={isCW?'cw':isPW?'pw':isGF?'gf':''}>
+                          <td>
+                            {row.strike}
+                            {isCW&&<span style={{fontSize:9,color:'var(--green)',marginLeft:4}}>▲CW</span>}
+                            {isPW&&<span style={{fontSize:9,color:'var(--red)',marginLeft:4}}>▼PW</span>}
+                            {isGF&&<span style={{fontSize:9,color:'var(--gold)',marginLeft:4}}>γF</span>}
+                          </td>
+                          <td style={{color:'var(--green)'}}>+{row.callGex}</td>
+                          <td style={{color:'var(--red)'}}>{row.putGex}</td>
+                          <td style={{color:row.netGex>=0?'var(--green)':'var(--red)'}}>{row.netGex>=0?'+':''}{row.netGex}</td>
+                          <td style={{color:'var(--muted)'}}>{row.oi.toLocaleString()}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
+          {/* AI card */}
+          <div className="aicard fu" style={{animationDelay:'0.32s'}}>
+            <div className="aico">A</div>
+            <div>
+              <div className="ail">GEX AI 解读</div>
+              <div className="ait">
+                <span style={{color:'var(--gold)',fontWeight:600}}>{ticker}</span> 当前处于正 Gamma 环境（Net GEX <span style={{color:'var(--green)',fontFamily:'var(--mono)'}}>+2.1B</span>），做市商将在 <span style={{fontFamily:'var(--mono)'}}>538–555</span> 区间内进行均值回归对冲。建议关注 <span style={{color:'var(--gold)',fontFamily:'var(--mono)'}}>543 γ Flip</span> 位，若跌破该位将进入负 Gamma 加速区间。当前低 IV 环境利好卖方策略（Credit Spread / Iron Condor）。
+              </div>
+            </div>
+          </div>
+          <div style={{height:8}}/>
+        </div>
+      </div>
+      <TweaksWrapper/>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
