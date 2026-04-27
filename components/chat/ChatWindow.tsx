@@ -6,11 +6,13 @@ import { clsx } from "clsx";
 import MessageBubble from "./MessageBubble";
 import RightPanel from "./RightPanel";
 
-type Message = {
+export type Message = {
   id: string;
   role: "user" | "assistant";
   content: string;
   thinking?: boolean;
+  streaming?: boolean;
+  toolStatus?: string;
 };
 
 const QUICK_PROMPTS = [
@@ -32,7 +34,6 @@ export default function ChatWindow() {
   const [mode, setMode] = useState<(typeof MODES)[number]>("快速问答");
   const [rightOpen, setRightOpen] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -42,25 +43,17 @@ export default function ChatWindow() {
     const question = (text ?? input).trim();
     if (!question || loading) return;
 
-    const userMsg: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: question,
-    };
-    const thinkingMsg: Message = {
-      id: Date.now().toString() + "-think",
-      role: "assistant",
-      content: "",
-      thinking: true,
-    };
+    const userMsg: Message = { id: Date.now().toString(), role: "user", content: question };
+    const aiId = Date.now().toString() + "-ai";
+    const aiMsg: Message = { id: aiId, role: "assistant", content: "", thinking: true };
 
-    setMessages((prev) => [...prev, userMsg, thinkingMsg]);
+    setMessages((prev) => [...prev, userMsg, aiMsg]);
     setInput("");
     setLoading(true);
 
-    // Build history for API (exclude thinking placeholders)
+    // Build history from settled messages only
     const history = [...messages, userMsg]
-      .filter((m) => !m.thinking)
+      .filter((m) => !m.thinking && !m.streaming)
       .map((m) => ({ role: m.role, content: m.content }));
 
     try {
@@ -70,21 +63,87 @@ export default function ChatWindow() {
         body: JSON.stringify({ messages: history, symbol: ticker }),
       });
 
-      const data = await res.json();
+      if (!res.ok || !res.body) {
+        const data = await res.json().catch(() => ({ error: "请求失败" }));
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === aiId ? { ...m, thinking: false, content: data.error ?? "请求失败" } : m
+          )
+        );
+        return;
+      }
 
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let fullContent = "";
+      let contentStarted = false;
+
+      outer: while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split("\n\n");
+        buffer = parts.pop() ?? "";
+
+        for (const part of parts) {
+          if (!part.startsWith("data: ")) continue;
+          const raw = part.slice(6).trim();
+          if (raw === "[DONE]") break outer;
+
+          try {
+            const ev = JSON.parse(raw);
+
+            if (ev.error) {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === aiId ? { ...m, thinking: false, content: `错误：${ev.error}` } : m
+                )
+              );
+              break outer;
+            }
+
+            // Tool status update — update the thinking label
+            if (ev.status) {
+              setMessages((prev) =>
+                prev.map((m) => (m.id === aiId ? { ...m, toolStatus: ev.status } : m))
+              );
+            }
+
+            // Text delta — transition from thinking to streaming on first chunk
+            if (ev.delta !== undefined) {
+              if (!contentStarted) {
+                contentStarted = true;
+                fullContent = ev.delta;
+                setMessages((prev) =>
+                  prev.map((m) =>
+                    m.id === aiId
+                      ? { ...m, thinking: false, streaming: true, content: fullContent, toolStatus: undefined }
+                      : m
+                  )
+                );
+              } else {
+                fullContent += ev.delta;
+                setMessages((prev) =>
+                  prev.map((m) => (m.id === aiId ? { ...m, content: fullContent } : m))
+                );
+              }
+            }
+          } catch {
+            // ignore malformed SSE lines
+          }
+        }
+      }
+
+      // Mark streaming complete
       setMessages((prev) =>
-        prev.map((m) =>
-          m.id === thinkingMsg.id
-            ? { ...m, content: data.content ?? data.error ?? "未知错误", thinking: false }
-            : m
-        )
+        prev.map((m) => (m.id === aiId ? { ...m, streaming: false } : m))
       );
     } catch {
       setMessages((prev) =>
         prev.map((m) =>
-          m.id === thinkingMsg.id
-            ? { ...m, content: "网络错误，请重试。", thinking: false }
-            : m
+          m.id === aiId ? { ...m, thinking: false, content: "网络错误，请重试。" } : m
         )
       );
     } finally {
@@ -110,7 +169,6 @@ export default function ChatWindow() {
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         {/* Toolbar */}
         <div className="flex items-center gap-3 px-4 py-2.5 border-b border-border2 bg-panel2 flex-shrink-0">
-          {/* Ticker selector */}
           <select
             value={ticker}
             onChange={(e) => setTicker(e.target.value)}
@@ -121,7 +179,6 @@ export default function ChatWindow() {
             ))}
           </select>
 
-          {/* Mode tabs */}
           <div className="flex gap-1 bg-white/[0.03] border border-border2 p-0.5 rounded-[6px]">
             {MODES.map((m) => (
               <button
@@ -170,7 +227,6 @@ export default function ChatWindow() {
 
         {/* Input area */}
         <div className="px-4 pb-4 flex-shrink-0">
-          {/* Quick prompts */}
           <div className="flex gap-2 mb-2 flex-wrap">
             {QUICK_PROMPTS.map((p) => (
               <button
@@ -185,7 +241,6 @@ export default function ChatWindow() {
 
           <div className="flex gap-2 items-end">
             <textarea
-              ref={textareaRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
@@ -223,7 +278,6 @@ export default function ChatWindow() {
         </div>
       </div>
 
-      {/* Right panel */}
       {rightOpen && <RightPanel ticker={ticker} />}
     </div>
   );

@@ -6,80 +6,115 @@ import type OpenAI from "openai";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
+const encoder = new TextEncoder();
+const sse = (obj: object) => encoder.encode(`data: ${JSON.stringify(obj)}\n\n`);
+
+const TOOL_STATUS: Record<string, string> = {
+  get_gex_data:      "拉取 GEX 数据",
+  get_market_data:   "获取市场行情",
+  get_recent_news:   "扫描实时新闻",
+  evaluate_strategy: "评估期权策略",
+};
+
 export async function POST(req: NextRequest) {
   const { messages, symbol = "SPY", tier = "free" } = await req.json();
 
   if (!messages || !Array.isArray(messages)) {
     return Response.json({ error: "messages required" }, { status: 400 });
   }
-
-  // Check API key
   if (!process.env.OPENROUTER_API_KEY) {
-    return Response.json(
-      { error: "OPENROUTER_API_KEY not configured" },
-      { status: 500 }
-    );
+    return Response.json({ error: "OPENROUTER_API_KEY not configured" }, { status: 500 });
   }
 
   const model = routeModel(messages[messages.length - 1]?.content ?? "", tier);
-  const systemMessage: OpenAI.Chat.ChatCompletionSystemMessageParam = {
-    role: "system",
-    content: SYSTEM_PROMPT + `\n\n当前关注标的：${symbol}`,
-  };
-
   const history: OpenAI.Chat.ChatCompletionMessageParam[] = [
-    systemMessage,
+    { role: "system", content: SYSTEM_PROMPT + `\n\n当前关注标的：${symbol}` },
     ...messages,
   ];
 
-  // ReAct loop — max 6 iterations to prevent infinite loops
-  let iterations = 0;
-  const MAX_ITER = 6;
+  const stream = new ReadableStream({
+    async start(controller) {
+      let iterations = 0;
+      let usedTools = false;
 
-  while (iterations < MAX_ITER) {
-    iterations++;
+      try {
+        // Phase 1: Tool-call loop (non-streaming; sends status events to client)
+        while (iterations < 5) {
+          iterations++;
 
-    const response = await openrouter.chat.completions.create({
-      model,
-      messages: history,
-      tools: TOOLS,
-      tool_choice: "auto",
-      max_tokens: 2048,
-    });
+          const resp = await openrouter.chat.completions.create({
+            model,
+            messages: history,
+            tools: TOOLS,
+            tool_choice: "auto",
+            max_tokens: 2048,
+          });
 
-    const choice = response.choices[0];
-    history.push(choice.message);
+          const choice = resp.choices[0];
 
-    // Done — return the final answer
-    if (choice.finish_reason === "stop" || !choice.message.tool_calls?.length) {
-      return Response.json({
-        content: choice.message.content,
-        model,
-        iterations,
-        usage: response.usage,
-      });
-    }
+          // No more tool calls — determine how to respond
+          if (!choice.message.tool_calls?.length || choice.finish_reason === "stop") {
+            if (!usedTools) {
+              // Simple Q&A, no tools — send full content as a single delta
+              controller.enqueue(sse({ meta: { model, iterations } }));
+              controller.enqueue(sse({ delta: choice.message.content ?? "" }));
+              controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+              controller.close();
+              return;
+            }
+            // Tools were used; break to Phase 2 (streaming synthesis)
+            break;
+          }
 
-    // Execute all tool calls in parallel
-    const toolResults = await Promise.all(
-      choice.message.tool_calls.map(async (tc) => {
-        const args = JSON.parse(tc.function.arguments || "{}");
-        const result = await executeTool(tc.function.name, args);
-        return {
-          role: "tool" as const,
-          tool_call_id: tc.id,
-          content: result,
-        };
-      })
-    );
+          // Notify client which tools are being called
+          for (const tc of choice.message.tool_calls) {
+            controller.enqueue(sse({ status: TOOL_STATUS[tc.function.name] ?? "分析数据" }));
+          }
 
-    history.push(...toolResults);
-  }
+          usedTools = true;
+          history.push(choice.message);
 
-  // Fallback if max iterations reached
-  return Response.json({
-    content: "分析超时，请换一个更具体的问题重试。",
-    model,
-    iterations,
+          const results = await Promise.all(
+            choice.message.tool_calls.map(async (tc) => {
+              const args = JSON.parse(tc.function.arguments || "{}");
+              const result = await executeTool(tc.function.name, args);
+              return { role: "tool" as const, tool_call_id: tc.id, content: result };
+            })
+          );
+          history.push(...results);
+        }
+
+        // Phase 2: Stream the final synthesis response
+        controller.enqueue(sse({ meta: { model, iterations } }));
+
+        const streamResp = await openrouter.chat.completions.create({
+          model,
+          messages: history,
+          stream: true,
+          max_tokens: 2048,
+        });
+
+        for await (const chunk of streamResp) {
+          const delta = chunk.choices[0]?.delta?.content;
+          if (delta) controller.enqueue(sse({ delta }));
+        }
+
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        controller.enqueue(sse({ error: msg }));
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+    },
   });
 }
