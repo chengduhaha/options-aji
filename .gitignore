@@ -19,6 +19,9 @@ Thumbs.db
 .vscode/
 .idea/
 
+# TypeScript
+*.tsbuildinfo
+
 # Logs
 *.log
 npm-debug.log*
