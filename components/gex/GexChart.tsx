@@ -1,59 +1,46 @@
 "use client";
 
-import { useMemo } from "react";
-
-type GexData = {
-  price: number;
-  flip: number;
-  callWall: number;
-  putWall: number;
+type StrikeData = {
+  strike: number;
+  callGex: number;
+  putGex: number;
+  net: number;
+  gamma: number;
+  oi: number;
+  iv: number;
 };
 
-function generateStrikes(price: number, count = 30) {
-  const step = price > 400 ? 5 : price > 100 ? 2.5 : 1;
-  const center = Math.round(price / step) * step;
-  const strikes = [];
-  for (let i = -Math.floor(count / 2); i <= Math.floor(count / 2); i++) {
-    const strike = center + i * step;
-    const dist = Math.abs(strike - price) / price;
-    const callGex = Math.max(0, (1.5 - dist * 12) + (Math.random() - 0.4) * 0.8);
-    const putGex  = Math.min(0, -(1.2 - dist * 10) + (Math.random() - 0.6) * 0.6);
-    strikes.push({ strike, callGex, putGex });
-  }
-  return strikes;
-}
-
-export default function GexChart({ ticker, data }: { ticker: string; data: GexData }) {
-  const strikes = useMemo(() => generateStrikes(data.price), [ticker]);
+export default function GexChart({ ticker, strikes, price }: { ticker: string; strikes: StrikeData[]; price: number }) {
+  if (!strikes || strikes.length === 0) return null;
 
   const W = 700, H = 260, PL = 48, PR = 20, PT = 10, PB = 30;
   const chartW = W - PL - PR;
   const chartH = H - PT - PB;
 
-  const maxGex = Math.max(...strikes.map((s) => Math.abs(s.callGex)), ...strikes.map((s) => Math.abs(s.putGex)), 0.1);
-  const barW = chartW / strikes.length - 1;
+  // Sort by strike ascending for chart rendering
+  const sorted = [...strikes].sort((a, b) => a.strike - b.strike);
+
+  const maxGex = Math.max(...sorted.map((s) => Math.max(s.callGex, s.putGex)), 0.1);
+  const barW = chartW / sorted.length - 1;
 
   const toY = (val: number) => {
     if (val >= 0) return chartH / 2 - (val / maxGex) * (chartH / 2 - 4);
     return chartH / 2 + (Math.abs(val) / maxGex) * (chartH / 2 - 4);
   };
 
-  const toX = (i: number) => PL + i * (chartW / strikes.length) + barW / 2;
+  const toX = (i: number) => PL + i * (chartW / sorted.length) + barW / 2;
 
   const strikeToX = (strike: number) => {
-    const idx = strikes.findIndex((s) => s.strike >= strike);
-    if (idx < 0) return PL + chartW;
-    const frac = (strike - strikes[idx - 1]?.strike) / ((strikes[idx]?.strike ?? strike) - (strikes[idx - 1]?.strike ?? strike - 1));
-    return PL + ((idx - 1 + frac) / strikes.length) * chartW;
+    const idx = sorted.findIndex((s) => s.strike >= strike);
+    if (idx <= 0) return PL;
+    const frac = (strike - sorted[idx - 1].strike) / (sorted[idx].strike - sorted[idx - 1].strike);
+    return PL + ((idx - 1 + frac) / sorted.length) * chartW;
   };
 
   const midY = PT + chartH / 2;
 
   const refLines = [
-    { val: data.price,    color: "#D4AF37", dash: "5,3", label: `${ticker} $${data.price.toFixed(2)}` },
-    { val: data.flip,     color: "#D4AF37", dash: "0",   label: `γ Flip: ${data.flip}` },
-    { val: data.callWall, color: "#00D4AA", dash: "5,3", label: `Call Wall: ${data.callWall}` },
-    { val: data.putWall,  color: "#FF6B6B", dash: "5,3", label: `Put Wall: ${data.putWall}` },
+    { val: price, color: "#D4AF37", dash: "5,3", label: `${ticker} $${price.toFixed(2)}` },
   ];
 
   return (
@@ -78,17 +65,17 @@ export default function GexChart({ ticker, data }: { ticker: string; data: GexDa
         })}
 
         {/* Bars */}
-        {strikes.map((s, i) => {
+        {sorted.map((s, i) => {
           const x = toX(i) - barW / 2;
           const callH = Math.abs(toY(s.callGex) - midY);
-          const putH  = Math.abs(toY(s.putGex)  - midY);
+          const putH = Math.abs(toY(s.putGex) - midY);
           return (
             <g key={s.strike}>
-              {s.callGex > 0.02 && (
+              {s.callGex > 0.001 && (
                 <rect x={x} y={midY - callH} width={barW} height={callH}
                   fill="#00D4AA" fillOpacity={0.75} rx="1" />
               )}
-              {s.putGex < -0.02 && (
+              {s.putGex > 0.001 && (
                 <rect x={x} y={midY} width={barW} height={putH}
                   fill="#FF6B6B" fillOpacity={0.75} rx="1" />
               )}
@@ -118,8 +105,8 @@ export default function GexChart({ ticker, data }: { ticker: string; data: GexDa
         <line x1={PL} y1={midY} x2={PL + chartW} y2={midY} stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
 
         {/* X axis labels (every 5th strike) */}
-        {strikes.filter((_, i) => i % 5 === 0).map((s, i, arr) => {
-          const x = toX(strikes.indexOf(s));
+        {sorted.filter((_, i) => i % 5 === 0).map((s) => {
+          const x = toX(sorted.indexOf(s));
           return (
             <text key={s.strike} x={x} y={PT + chartH + 16} textAnchor="middle" fontSize="9" fill="#8B8D97" fontFamily="JetBrains Mono, monospace">
               {s.strike.toFixed(0)}

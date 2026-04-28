@@ -1,5 +1,18 @@
-// Tool definitions for the OpenRouter ReAct loop
-// In POC: returns mock data. Replace with real API calls later.
+import type OpenAI from "openai";
+
+const API_BASE = process.env.RAILWAY_API_URL || "http://localhost:8000";
+const API_KEY = process.env.RAILWAY_API_KEY || "dev-key-change-me";
+
+async function fetchBackend(path: string) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { "X-API-Key": API_KEY },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Backend error ${res.status}: ${text}`);
+  }
+  return res.json();
+}
 
 export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   {
@@ -74,8 +87,6 @@ export const TOOLS: OpenAI.Chat.ChatCompletionTool[] = [
   },
 ];
 
-// Tool execution — POC uses mock data
-// Replace each function body with real API calls (FlashAlpha, Polygon.io, etc.)
 export async function executeTool(
   name: string,
   args: Record<string, unknown>
@@ -83,11 +94,43 @@ export async function executeTool(
   const symbol = (args.symbol as string)?.toUpperCase() ?? "SPY";
 
   switch (name) {
-    case "get_gex_data":
-      return JSON.stringify(mockGexData(symbol));
+    case "get_gex_data": {
+      try {
+        const data = await fetchBackend(`/gex/${symbol}`);
+        return JSON.stringify({
+          symbol: data.symbol,
+          net_gex: data.netGex,
+          net_gex_unit: "B",
+          regime: data.regime,
+          regime_zh: data.regime === "Positive Gamma" ? "正 Gamma 环境" : "负 Gamma 环境",
+          gamma_flip: data.gammaFlip,
+          call_wall: data.callWall,
+          put_wall: data.putWall,
+          max_pain: data.maxPain,
+          updated_at: data.timestamp,
+          note: `${data.symbol} 当前处于${data.regime}，Call Wall ${data.callWall}，Put Wall ${data.putWall}。`,
+        });
+      } catch (e: any) {
+        return JSON.stringify({ error: `GEX data unavailable: ${e.message}` });
+      }
+    }
 
-    case "get_market_data":
-      return JSON.stringify(mockMarketData(symbol));
+    case "get_market_data": {
+      try {
+        const data = await fetchBackend(`/market/${symbol}`);
+        return JSON.stringify({
+          symbol: data.symbol,
+          price: data.price,
+          change_pct: data.changePct,
+          atm_iv: data.atmIv,
+          iv_rank: data.ivRank,
+          put_call_ratio: data.pcr,
+          volume: data.volume,
+        });
+      } catch (e: any) {
+        return JSON.stringify({ error: `Market data unavailable: ${e.message}` });
+      }
+    }
 
     case "get_recent_news":
       return JSON.stringify(mockNews(symbol));
@@ -98,64 +141,6 @@ export async function executeTool(
     default:
       return JSON.stringify({ error: `Unknown tool: ${name}` });
   }
-}
-
-// ── Mock data (replace with real API calls) ──────────────────────────────────
-
-function mockGexData(symbol: string) {
-  const base: Record<string, object> = {
-    SPY: {
-      symbol: "SPY",
-      net_gex: -0.4,
-      net_gex_unit: "B",
-      regime: "Negative Gamma",
-      regime_zh: "负 Gamma 环境",
-      gamma_flip: 543,
-      call_wall: 555,
-      put_wall: 535,
-      max_pain: 545,
-      updated_at: new Date().toISOString(),
-      note: "做市商将顺势对冲，波动率扩张风险上升",
-    },
-    QQQ: {
-      symbol: "QQQ",
-      net_gex: 1.2,
-      net_gex_unit: "B",
-      regime: "Positive Gamma",
-      regime_zh: "正 Gamma 环境",
-      gamma_flip: 448,
-      call_wall: 465,
-      put_wall: 438,
-      max_pain: 450,
-      updated_at: new Date().toISOString(),
-      note: "做市商做均值回归对冲，波动被压制",
-    },
-  };
-  return (
-    base[symbol] ?? {
-      symbol,
-      net_gex: 0.8,
-      net_gex_unit: "B",
-      regime: "Positive Gamma",
-      regime_zh: "正 Gamma 环境",
-      gamma_flip: 150,
-      call_wall: 165,
-      put_wall: 140,
-      max_pain: 155,
-      updated_at: new Date().toISOString(),
-    }
-  );
-}
-
-function mockMarketData(symbol: string) {
-  const base: Record<string, object> = {
-    SPY: { symbol: "SPY", price: 548.32, change_pct: -0.42, atm_iv: 18.5, iv_rank: 42, put_call_ratio: 0.92, volume: 82_000_000 },
-    QQQ: { symbol: "QQQ", price: 452.18, change_pct: -0.31, atm_iv: 21.2, iv_rank: 38, put_call_ratio: 0.88, volume: 45_000_000 },
-    AAPL: { symbol: "AAPL", price: 192.45, change_pct: 0.12, atm_iv: 24.5, iv_rank: 55, put_call_ratio: 0.74, volume: 62_000_000 },
-    NVDA: { symbol: "NVDA", price: 138.72, change_pct: 1.84, atm_iv: 58.3, iv_rank: 72, put_call_ratio: 0.65, volume: 290_000_000 },
-    TSLA: { symbol: "TSLA", price: 248.90, change_pct: -1.20, atm_iv: 68.1, iv_rank: 61, put_call_ratio: 0.81, volume: 120_000_000 },
-  };
-  return base[symbol] ?? { symbol, price: 100, change_pct: 0, atm_iv: 25, iv_rank: 50, put_call_ratio: 0.8 };
 }
 
 function mockNews(symbol: string) {
@@ -202,6 +187,3 @@ function mockStrategyEval(args: Record<string, unknown>) {
     notes: ["当前 GEX 环境偏空，建议谨慎", "FOMC 会议前波动率可能上升", "建议仓位控制在账户的 2-3%"],
   };
 }
-
-// Type import for tool definition
-import type OpenAI from "openai";

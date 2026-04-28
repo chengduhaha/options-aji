@@ -1,36 +1,74 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { RefreshCw } from "lucide-react";
 import { clsx } from "clsx";
 import GexChart from "@/components/gex/GexChart";
 import GexTrendChart from "@/components/gex/GexTrendChart";
 
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "dev-key-change-me";
+
 const TICKERS = ["SPY", "QQQ", "AAPL", "TSLA", "NVDA"];
 const EXPIRATIONS = ["All Expirations", "This Week", "Next Week", "Monthly"];
 
-const GEX_DATA: Record<string, {
-  netGex: number; flip: number; callWall: number; putWall: number;
-  maxPain: number; price: number; regime: string; regimeZh: string;
-}> = {
-  SPY:  { netGex: -0.4, flip: 543, callWall: 555, putWall: 535, maxPain: 545, price: 548.32, regime: "Negative γ", regimeZh: "高波动" },
-  QQQ:  { netGex:  1.2, flip: 448, callWall: 465, putWall: 438, maxPain: 450, price: 452.18, regime: "Positive γ", regimeZh: "低波动" },
-  AAPL: { netGex:  0.6, flip: 190, callWall: 200, putWall: 185, maxPain: 193, price: 192.45, regime: "Positive γ", regimeZh: "低波动" },
-  TSLA: { netGex: -0.2, flip: 245, callWall: 260, putWall: 235, maxPain: 248, price: 248.90, regime: "Negative γ", regimeZh: "高波动" },
-  NVDA: { netGex:  2.1, flip: 135, callWall: 145, putWall: 128, maxPain: 138, price: 138.72, regime: "Positive γ", regimeZh: "低波动" },
+type StrikeData = {
+  strike: number;
+  callGex: number;
+  putGex: number;
+  net: number;
+  gamma: number;
+  oi: number;
+  iv: number;
+};
+
+type GexProfile = {
+  symbol: string;
+  expiration: string;
+  netGex: number;
+  callWall: number;
+  putWall: number;
+  gammaFlip: number;
+  maxPain: number;
+  regime: string;
+  strikes: StrikeData[];
+  timestamp: string;
 };
 
 export default function GexPage() {
   const [ticker, setTicker] = useState("SPY");
   const [expiry, setExpiry] = useState("All Expirations");
   const [refreshing, setRefreshing] = useState(false);
-  const d = GEX_DATA[ticker];
-  const isPositive = d.netGex >= 0;
+  const [profile, setProfile] = useState<GexProfile | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const fetchProfile = async (sym: string) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/gex/${sym}`, {
+        headers: { "X-API-Key": API_KEY },
+      });
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      setProfile(data);
+    } catch {
+      setProfile(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProfile(ticker);
+  }, [ticker]);
 
   const refresh = () => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 1200);
+    fetchProfile(ticker).finally(() => setTimeout(() => setRefreshing(false), 600));
   };
+
+  const d = profile;
+  const isPositive = d ? d.netGex >= 0 : true;
 
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-bg">
@@ -66,7 +104,7 @@ export default function GexPage() {
         </select>
 
         <div className="ml-auto flex items-center gap-2 text-[11px] text-muted">
-          <span>Updated 2 min ago</span>
+          <span>{d ? `Updated ${new Date(d.timestamp).toLocaleTimeString()}` : "Loading..."}</span>
           <button
             onClick={refresh}
             className="p-1.5 rounded-[6px] border border-border2 hover:border-border hover:text-text transition-all"
@@ -82,28 +120,28 @@ export default function GexPage() {
           {[
             {
               label: "Net GEX",
-              value: `${d.netGex >= 0 ? "+" : ""}${d.netGex}B`,
+              value: d ? `${d.netGex >= 0 ? "+" : ""}${d.netGex.toFixed(1)}B` : "—",
               color: isPositive ? "text-green" : "text-red",
               arrow: isPositive ? "↑" : "↓",
               sub: isPositive ? "做市商均值回归" : "顺势对冲加速",
             },
             {
               label: "Gamma Flip",
-              value: d.flip.toFixed(2),
+              value: d ? d.gammaFlip.toFixed(2) : "—",
               color: "text-gold",
               arrow: "",
               sub: "多空分界线",
             },
             {
               label: "GEX Regime",
-              value: d.regime,
+              value: d ? (d.regime === "Positive Gamma" ? "Positive γ" : "Negative γ") : "—",
               color: isPositive ? "text-green" : "text-red",
               arrow: "",
-              sub: `${d.regimeZh}环境`,
+              sub: d ? (isPositive ? "低波动环境" : "高波动环境") : "",
             },
             {
               label: "Max Pain",
-              value: d.maxPain.toFixed(2),
+              value: d ? d.maxPain.toFixed(2) : "—",
               color: "text-text",
               arrow: "",
               sub: "期权到期磁力位",
@@ -136,7 +174,11 @@ export default function GexPage() {
               <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-red inline-block" /> Put GEX</span>
             </div>
           </div>
-          <GexChart ticker={ticker} data={d} />
+          {d && d.strikes ? (
+            <GexChart ticker={ticker} strikes={d.strikes} price={d.strikes.length > 0 ? d.strikes[Math.floor(d.strikes.length/2)].strike : 0} />
+          ) : (
+            <div className="h-[260px] flex items-center justify-center text-muted text-[13px]">加载中...</div>
+          )}
         </div>
 
         {/* Bottom row */}
@@ -148,7 +190,16 @@ export default function GexPage() {
 
           <div className="bg-panel border border-border2 rounded-[10px] p-4">
             <div className="text-[12px] font-semibold text-text mb-3">Top Strikes by GEX</div>
-            <StrikesTable ticker={ticker} data={d} />
+            {d && d.strikes ? (
+              <StrikesTable ticker={ticker} strikes={d.strikes} data={{
+                callWall: d.callWall,
+                putWall: d.putWall,
+                gammaFlip: d.gammaFlip,
+                price: d.strikes.length > 0 ? d.strikes[Math.floor(d.strikes.length/2)].strike : 0,
+              }} />
+            ) : (
+              <div className="text-muted text-[13px]">加载中...</div>
+            )}
           </div>
         </div>
 
@@ -156,10 +207,13 @@ export default function GexPage() {
         <div className="bg-panel border border-border rounded-[10px] p-4">
           <div className="text-[11px] text-gold font-semibold mb-1.5">📊 GEX AI 解读</div>
           <p className="text-[13px] text-muted leading-relaxed">
-            {ticker} 当前处于{isPositive ? "正" : "负"} Gamma 环境（Net GEX {d.netGex >= 0 ? "+" : ""}{d.netGex}B），
-            {isPositive
-              ? `做市商将在 ${d.putWall}–${d.callWall} 区间内进行均值回归对冲，压制波动率。关注 ${d.flip} 的 Gamma Flip 位，若跌破将进入负 Gamma 加速区。`
-              : `做市商将顺势对冲（price↓ → sell delta），波动率扩张风险上升。关键支撑 ${d.putWall}（Put Wall），阻力 ${d.callWall}（Call Wall）。`
+            {d
+              ? `${d.symbol} 当前处于${isPositive ? "正" : "负"} Gamma 环境（Net GEX ${d.netGex >= 0 ? "+" : ""}${d.netGex.toFixed(1)}B），
+                ${isPositive
+                  ? `做市商将在 ${d.putWall}–${d.callWall} 区间内进行均值回归对冲，压制波动率。关注 ${d.gammaFlip} 的 Gamma Flip 位，若跌破将进入负 Gamma 加速区。`
+                  : `做市商将顺势对冲（price↓ → sell delta），波动率扩张风险上升。关键支撑 ${d.putWall}（Put Wall），阻力 ${d.callWall}（Call Wall）。`
+                }`
+              : "加载中..."
             }
           </p>
         </div>
@@ -168,16 +222,8 @@ export default function GexPage() {
   );
 }
 
-function StrikesTable({ data }: { ticker: string; data: typeof GEX_DATA[string] }) {
-  const rows = [
-    { strike: data.callWall, callGex: 1.8, putGex: -0.2, net: 1.6, oi: 142000, label: "Call Wall" },
-    { strike: data.flip,     callGex: 0.4, putGex: -0.3, net: 0.1, oi: 98000,  label: "γ Flip" },
-    { strike: data.putWall,  callGex: 0.2, putGex: -1.4, net: -1.2, oi: 118000, label: "Put Wall" },
-    { strike: data.price + 5,  callGex: 0.6, putGex: -0.1, net: 0.5, oi: 76000 },
-    { strike: data.price - 5,  callGex: 0.1, putGex: -0.5, net: -0.4, oi: 84000 },
-    { strike: data.price + 10, callGex: 0.9, putGex: -0.0, net: 0.9, oi: 62000 },
-    { strike: data.price - 10, callGex: 0.0, putGex: -0.8, net: -0.8, oi: 71000 },
-  ].sort((a, b) => b.strike - a.strike);
+function StrikesTable({ strikes, data }: { ticker: string; strikes: StrikeData[]; data: { callWall: number; putWall: number; gammaFlip: number; price: number } }) {
+  const topStrikes = strikes.slice(0, 10);
 
   return (
     <div className="overflow-x-auto">
@@ -192,37 +238,44 @@ function StrikesTable({ data }: { ticker: string; data: typeof GEX_DATA[string] 
           </tr>
         </thead>
         <tbody className="divide-y divide-border2">
-          {rows.map((r) => (
-            <tr
-              key={r.strike}
-              className={clsx(
-                "font-mono",
-                r.label === "Call Wall" && "bg-green/5",
-                r.label === "Put Wall" && "bg-red/5",
-                r.label === "γ Flip"   && "bg-gold/5"
-              )}
-            >
-              <td className="py-1.5 text-text font-semibold">
-                {r.strike.toFixed(0)}
-                {r.label && (
-                  <span className={clsx(
-                    "ml-1.5 text-[9px] px-1 rounded",
-                    r.label === "Call Wall" && "text-green bg-green/10",
-                    r.label === "Put Wall"  && "text-red bg-red/10",
-                    r.label === "γ Flip"    && "text-gold bg-gold/10"
-                  )}>
-                    {r.label}
-                  </span>
+          {topStrikes.map((r) => {
+            const label =
+              Math.abs(r.strike - data.callWall) < 0.1 ? "Call Wall" :
+              Math.abs(r.strike - data.putWall) < 0.1 ? "Put Wall" :
+              Math.abs(r.strike - data.gammaFlip) < 0.1 ? "γ Flip" :
+              undefined;
+            return (
+              <tr
+                key={r.strike}
+                className={clsx(
+                  "font-mono",
+                  label === "Call Wall" && "bg-green/5",
+                  label === "Put Wall" && "bg-red/5",
+                  label === "γ Flip" && "bg-gold/5"
                 )}
-              </td>
-              <td className="py-1.5 text-right text-green">+{r.callGex.toFixed(1)}B</td>
-              <td className="py-1.5 text-right text-red">{r.putGex.toFixed(1)}B</td>
-              <td className={clsx("py-1.5 text-right", r.net >= 0 ? "text-green" : "text-red")}>
-                {r.net >= 0 ? "+" : ""}{r.net.toFixed(1)}B
-              </td>
-              <td className="py-1.5 text-right text-muted">{(r.oi / 1000).toFixed(0)}K</td>
-            </tr>
-          ))}
+              >
+                <td className="py-1.5 text-text font-semibold">
+                  {r.strike.toFixed(0)}
+                  {label && (
+                    <span className={clsx(
+                      "ml-1.5 text-[9px] px-1 rounded",
+                      label === "Call Wall" && "text-green bg-green/10",
+                      label === "Put Wall" && "text-red bg-red/10",
+                      label === "γ Flip" && "text-gold bg-gold/10"
+                    )}>
+                      {label}
+                    </span>
+                  )}
+                </td>
+                <td className="py-1.5 text-right text-green">+{r.callGex.toFixed(1)}B</td>
+                <td className="py-1.5 text-right text-red">{r.putGex.toFixed(1)}B</td>
+                <td className={clsx("py-1.5 text-right", r.net >= 0 ? "text-green" : "text-red")}>
+                  {r.net >= 0 ? "+" : ""}{r.net.toFixed(1)}B
+                </td>
+                <td className="py-1.5 text-right text-muted">{(r.oi / 1000).toFixed(0)}K</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

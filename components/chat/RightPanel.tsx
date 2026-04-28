@@ -1,11 +1,19 @@
 "use client";
 
-const MARKET_DATA: Record<string, { price: number; chg: number; iv: number; ivRank: number; pcr: number }> = {
-  SPY:  { price: 548.32, chg:  0.80, iv: 18.5, ivRank: 35, pcr: 0.85 },
-  QQQ:  { price: 452.18, chg: -0.31, iv: 21.2, ivRank: 38, pcr: 0.88 },
-  AAPL: { price: 192.45, chg:  0.12, iv: 24.5, ivRank: 55, pcr: 0.74 },
-  TSLA: { price: 248.90, chg: -1.20, iv: 68.1, ivRank: 61, pcr: 0.81 },
-  NVDA: { price: 138.72, chg:  1.84, iv: 58.3, ivRank: 72, pcr: 0.65 },
+import { useState, useEffect } from "react";
+
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "dev-key-change-me";
+
+type MarketData = {
+  symbol: string;
+  price: number;
+  changePct: number;
+  atmIv: number;
+  ivRank: number;
+  pcr: number;
+  volume: number;
+  timestamp: string;
 };
 
 const NEWS = [
@@ -15,8 +23,34 @@ const NEWS = [
 ];
 
 export default function RightPanel({ ticker }: { ticker: string }) {
-  const data = MARKET_DATA[ticker] ?? MARKET_DATA.SPY;
-  const isUp = data.chg >= 0;
+  const [data, setData] = useState<MarketData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetch(`${API_BASE}/market/${ticker}`, {
+      headers: { "X-API-Key": API_KEY },
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!cancelled) setData(d);
+      })
+      .catch(() => {
+        if (!cancelled) setData(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [ticker]);
+
+  const price = data?.price ?? 548.32;
+  const chg = data?.changePct ?? 0.0;
+  const iv = data?.atmIv ?? 18.5;
+  const ivRank = data?.ivRank ?? 35;
+  const pcr = data?.pcr ?? 0.85;
+  const isUp = chg >= 0;
 
   return (
     <aside className="w-[290px] flex-shrink-0 border-l border-border2 flex flex-col bg-panel2 overflow-y-auto">
@@ -25,11 +59,11 @@ export default function RightPanel({ ticker }: { ticker: string }) {
         <div className="flex items-baseline justify-between mb-1">
           <span className="text-[13px] font-semibold font-mono text-text">{ticker}</span>
           <span className={`text-[11px] font-mono ${isUp ? "text-green" : "text-red"}`}>
-            {isUp ? "▲" : "▼"} {Math.abs(data.chg).toFixed(2)}%
+            {isUp ? "▲" : "▼"} {Math.abs(chg).toFixed(2)}%
           </span>
         </div>
         <div className="text-[26px] font-bold font-mono text-text leading-none">
-          ${data.price.toFixed(2)}
+          ${price.toFixed(2)}
         </div>
 
         {/* Sparkline placeholder */}
@@ -59,9 +93,9 @@ export default function RightPanel({ ticker }: { ticker: string }) {
         {/* IV / PCR */}
         <div className="grid grid-cols-3 gap-2 mt-3">
           {[
-            { label: "ATM IV", value: `${data.iv}%` },
-            { label: "IV Rank", value: `${data.ivRank}%` },
-            { label: "P/C Ratio", value: data.pcr.toFixed(2) },
+            { label: "ATM IV", value: `${iv.toFixed(1)}%` },
+            { label: "IV Rank", value: `${ivRank}%` },
+            { label: "P/C Ratio", value: pcr.toFixed(2) },
           ].map((item) => (
             <div key={item.label} className="bg-bg/60 rounded-[6px] px-2 py-1.5 text-center">
               <div className="text-[9.5px] text-muted mb-0.5">{item.label}</div>
@@ -69,6 +103,7 @@ export default function RightPanel({ ticker }: { ticker: string }) {
             </div>
           ))}
         </div>
+        {loading && <div className="text-[10px] text-muted mt-1 text-center">加载中...</div>}
       </div>
 
       {/* News */}
