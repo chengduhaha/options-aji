@@ -1,3 +1,5 @@
+import asyncio
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 
@@ -18,16 +20,22 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup and shutdown events."""
+    """Startup and shutdown events.
+    NOTE: refresh_all() runs in a background task so it doesn't block
+    the event loop and health checks.
+    """
     logger.info("Initializing database...")
     init_db()
     logger.info("Database ready")
 
-    logger.info("Running initial data refresh...")
-    refresh_all()
-
+    # Start scheduler first so it can run subsequent jobs
     logger.info("Starting scheduler...")
     start_scheduler(settings.REFRESH_INTERVAL)
+
+    # Run initial refresh in a background thread to avoid blocking startup
+    logger.info("Running initial data refresh (background)...")
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, refresh_all)
 
     yield
 
