@@ -5,6 +5,7 @@ import { Send, Plus, RefreshCw, ChevronRight, ChevronLeft } from "lucide-react";
 import { clsx } from "clsx";
 import MessageBubble from "./MessageBubble";
 import RightPanel from "./RightPanel";
+import { runAgentViaSseStream } from "@/lib/agentSse";
 
 type Message = {
   id: string;
@@ -24,6 +25,17 @@ const QUICK_PROMPTS = [
 const TICKERS = ["SPY", "QQQ", "AAPL", "TSLA", "NVDA", "AMZN", "MSFT"];
 const MODES = ["快速问答", "深度分析", "策略评估"] as const;
 
+const USE_AGENT_SSE = process.env.NEXT_PUBLIC_USE_AGENT_SSE === "1";
+
+function readOptionalBearerToken(): string | null {
+  const fromPublicEnv = process.env.NEXT_PUBLIC_AGENT_BEARER?.trim();
+  if (fromPublicEnv) {
+    return fromPublicEnv;
+  }
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem("optionsaji_subscription_token")?.trim() ?? null;
+}
+
 export default function ChatWindow() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -33,6 +45,7 @@ export default function ChatWindow() {
   const [rightOpen, setRightOpen] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const sessionRef = useRef<string>(crypto.randomUUID());
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -58,12 +71,23 @@ export default function ChatWindow() {
     setInput("");
     setLoading(true);
 
-    // Build history for API (exclude thinking placeholders)
-    const history = [...messages, userMsg]
-      .filter((m) => !m.thinking)
-      .map((m) => ({ role: m.role, content: m.content }));
-
     try {
+      if (USE_AGENT_SSE) {
+        await runAgentViaSseStream({
+          question,
+          ticker,
+          bearerToken: readOptionalBearerToken(),
+          thinkingMsgId: thinkingMsg.id,
+          setMessages,
+          sessionRef,
+        });
+        return;
+      }
+
+      const history = [...messages, userMsg]
+        .filter((member) => !member.thinking)
+        .map((member) => ({ role: member.role, content: member.content }));
+
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -102,6 +126,7 @@ export default function ChatWindow() {
   const newChat = () => {
     setMessages([]);
     setInput("");
+    sessionRef.current = crypto.randomUUID();
   };
 
   return (
