@@ -19,7 +19,32 @@ export type AgentChatMessage = {
   role: "user" | "assistant";
   content: string;
   thinking?: boolean;
+  /** Real agent trace lines from SSE (no mock steps). */
+  thinkingLines?: string[];
 };
+
+function eventLabel(kind: AgentSseEvent["type"]): string {
+  switch (kind) {
+    case "thinking":
+      return "思考";
+    case "data_fetched":
+      return "数据";
+    case "error":
+      return "错误";
+    default:
+      return "事件";
+  }
+}
+
+function pushTraceLine(
+  existing: readonly string[] | undefined,
+  line: string,
+): string[] {
+  const base = [...(existing ?? [])];
+  if (!line.trim()) return base;
+  base.push(line.trim());
+  return base;
+}
 
 async function consumeSse(
   reader: ReadableStreamDefaultReader<Uint8Array>,
@@ -89,6 +114,24 @@ export async function runAgentViaSseStream(params: {
     headersRecord.Authorization = `Bearer ${params.bearerToken}`;
   }
 
+  const finalizeStaleThinking = (): void => {
+    params.setMessages((prev) =>
+      prev.map((m) =>
+        m.id === params.thinkingMsgId && m.thinking
+          ? {
+              ...m,
+              thinking: false,
+              content:
+                m.content ||
+                (m.thinkingLines && m.thinkingLines.length > 0
+                  ? m.thinkingLines.join("\n")
+                  : "SSE 结束，但未收到模型回答片段。"),
+            }
+          : m,
+      ),
+    );
+  };
+
   try {
     const resp = await fetch("/api/agent/query", {
       method: "POST",
@@ -108,6 +151,7 @@ export async function runAgentViaSseStream(params: {
             ? {
                 ...member,
                 thinking: false,
+                thinkingLines: pushTraceLine(member.thinkingLines, `[HTTP ${resp.status}] ${text.slice(0, 300)}`),
                 content:
                   resp.status === 503
                     ? `Agent 后端未就绪：${text || "请先配置 OPTIONS_AJI_BACKEND_URL。"}`
@@ -119,25 +163,37 @@ export async function runAgentViaSseStream(params: {
       return;
     }
 
+    let seenAnswer = false;
+
     await consumeSse(resp.body.getReader(), {
       onEvent: (eventItem) => {
-        if (
-          eventItem.type === "thinking" ||
-          eventItem.type === "data_fetched" ||
-          eventItem.type === "error"
-        ) {
-          const label =
-            eventItem.type === "error"
-              ? `错误：${eventItem.content ?? ""}`
-              : eventItem.content ?? "";
-
+        if (eventItem.type === "thinking" || eventItem.type === "data_fetched") {
+          const blob = `${eventLabel(eventItem.type)}｜${eventItem.content ?? ""}`;
           params.setMessages((membership) =>
             membership.map((messageEntry) =>
               messageEntry.id === params.thinkingMsgId
                 ? {
                     ...messageEntry,
-                    content: label,
                     thinking: true,
+                    thinkingLines: pushTraceLine(messageEntry.thinkingLines, blob),
+                  }
+                : messageEntry,
+            ),
+          );
+        }
+
+        if (eventItem.type === "error") {
+          params.setMessages((membership) =>
+            membership.map((messageEntry) =>
+              messageEntry.id === params.thinkingMsgId
+                ? {
+                    ...messageEntry,
+                    thinking: false,
+                    thinkingLines: pushTraceLine(
+                      messageEntry.thinkingLines,
+                      `${eventLabel(eventItem.type)}｜${eventItem.content ?? "未知错误"}`,
+                    ),
+                    content: eventItem.content ?? "Agent 报错",
                   }
                 : messageEntry,
             ),
@@ -145,6 +201,7 @@ export async function runAgentViaSseStream(params: {
         }
 
         if (eventItem.type === "answer") {
+          seenAnswer = true;
           params.setMessages((membership) =>
             membership.map((messageEntry) =>
               messageEntry.id === params.thinkingMsgId
@@ -159,6 +216,10 @@ export async function runAgentViaSseStream(params: {
         }
       },
     });
+
+    if (!seenAnswer) {
+      finalizeStaleThinking();
+    }
   } catch (connectionError: unknown) {
     const messageLabel =
       connectionError instanceof Error
@@ -171,6 +232,10 @@ export async function runAgentViaSseStream(params: {
           ? {
               ...messageEntry,
               thinking: false,
+              thinkingLines: pushTraceLine(
+                messageEntry.thinkingLines,
+                `${eventLabel("error")}｜${messageLabel}`,
+              ),
               content: `${messageLabel}，无法连接 Agent SSE。`,
             }
           : messageEntry,

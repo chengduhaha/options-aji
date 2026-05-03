@@ -5,14 +5,9 @@ import { Send, Plus, RefreshCw, ChevronRight, ChevronLeft } from "lucide-react";
 import { clsx } from "clsx";
 import MessageBubble from "./MessageBubble";
 import RightPanel from "./RightPanel";
-import { runAgentViaSseStream } from "@/lib/agentSse";
+import { runAgentViaSseStream, type AgentChatMessage } from "@/lib/agentSse";
 
-type Message = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  thinking?: boolean;
-};
+type Message = AgentChatMessage;
 
 const QUICK_PROMPTS = [
   "GEX 分析",
@@ -65,6 +60,7 @@ export default function ChatWindow() {
       role: "assistant",
       content: "",
       thinking: true,
+      thinkingLines: [],
     };
 
     setMessages((prev) => [...prev, userMsg, thinkingMsg]);

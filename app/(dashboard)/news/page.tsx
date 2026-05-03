@@ -39,7 +39,7 @@ export default function NewsPage() {
     try {
       const params = new URLSearchParams({
         hours: String(hours),
-        limit: "80",
+        limit: "160",
       });
       if (tickerQuery) params.set("ticker", tickerQuery);
 
