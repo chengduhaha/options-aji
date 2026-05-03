@@ -13,6 +13,14 @@ export type AgentSseEvent =
   | { type: "done" }
   | { type: "error"; content: string | null };
 
+/** Aligns with `ChatWindow` message rows used by SSE updates. */
+export type AgentChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  thinking?: boolean;
+};
+
 async function consumeSse(
   reader: ReadableStreamDefaultReader<Uint8Array>,
   callbacks: {
@@ -69,7 +77,7 @@ export async function runAgentViaSseStream(params: {
   ticker: string;
   bearerToken?: string | null;
   thinkingMsgId: string;
-  setMessages: Dispatch<SetStateAction<Message[]>>;
+  setMessages: Dispatch<SetStateAction<AgentChatMessage[]>>;
   sessionRef: MutableRefObject<string>;
 }): Promise<void> {
   const headersRecord: Record<string, string> = {
