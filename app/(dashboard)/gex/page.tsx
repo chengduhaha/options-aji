@@ -6,7 +6,6 @@ import { clsx } from "clsx";
 import GexChart from "@/components/gex/GexChart";
 import GexTrendChart from "@/components/gex/GexTrendChart";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "dev-key-change-me";
 
 const TICKERS = ["SPY", "QQQ", "AAPL", "TSLA", "NVDA"];
@@ -45,7 +44,7 @@ export default function GexPage() {
   const fetchProfile = async (sym: string) => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/gex/${sym}`, {
+      const res = await fetch(`/api/gex/${encodeURIComponent(sym)}`, {
         headers: { "X-API-Key": API_KEY },
       });
       if (!res.ok) throw new Error("Failed");

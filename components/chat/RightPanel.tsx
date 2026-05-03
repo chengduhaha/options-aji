@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+/** 经 Next `/api/market/*` 代理到 `OPTIONS_AJI_BACKEND_URL`（避免 HTTPS 页直连 HTTP VPS 混合内容阻断）。 */
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "dev-key-change-me";
 
 type MarketData = {
@@ -29,7 +29,7 @@ export default function RightPanel({ ticker }: { ticker: string }) {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    fetch(`${API_BASE}/market/${ticker}`, {
+    fetch(`/api/market/${encodeURIComponent(ticker)}`, {
       headers: { "X-API-Key": API_KEY },
     })
       .then((r) => (r.ok ? r.json() : null))
