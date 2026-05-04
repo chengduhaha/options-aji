@@ -39,10 +39,8 @@ export default function GexPage() {
   const [expiry, setExpiry] = useState("All Expirations");
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState<GexProfile | null>(null);
-  const [loading, setLoading] = useState(true);
 
   const fetchProfile = async (sym: string) => {
-    setLoading(true);
     try {
       const res = await fetch(`/api/gex/${encodeURIComponent(sym)}`, {
         headers: { "X-API-Key": API_KEY },
@@ -52,8 +50,6 @@ export default function GexPage() {
       setProfile(data);
     } catch {
       setProfile(null);
-    } finally {
-      setLoading(false);
     }
   };
 

@@ -79,6 +79,13 @@ export default function SettingsPage() {
         </p>
       </header>
 
+      <section className="rounded-[10px] border border-border2 bg-panel2 p-4 space-y-2">
+        <h2 className="text-[13px] font-semibold text-muted uppercase tracking-wide">订阅与推送（规划）</h2>
+        <p className="text-[12px] text-muted leading-relaxed">
+          Free / Pro / Alpha 套餐与 Stripe 结账、Telegram 推送等功能将接入统一账户系统。当前环境不扣费、不限次数演示。
+        </p>
+      </section>
+
       {loading ? (
         <div className="rounded-[10px] border border-border2 bg-panel2 px-4 py-3 text-muted">
           加载集成状态中…

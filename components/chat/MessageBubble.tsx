@@ -1,7 +1,5 @@
 "use client";
 
-import { clsx } from "clsx";
-
 type Message = {
   id: string;
   role: "user" | "assistant";
