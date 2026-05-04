@@ -27,12 +27,60 @@ type IntegrationPayload = {
     quote: Record<string, unknown>;
     option_chain_summary: Record<string, unknown>;
   };
+  stripe_billing_configured?: boolean;
+};
+
+const API_KEY_LS = "optionsaji_api_key";
+
+type BillingStatusPayload = {
+  registered?: boolean;
+  plan?: string | null;
+  stripe_customer_id?: string | null;
+  current_period_end_utc?: string | null;
+  agent_queries_today?: number;
+  free_daily_limit?: number;
+  stripe_configured?: boolean;
 };
 
 export default function SettingsPage() {
   const [data, setData] = useState<IntegrationPayload | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [apiKey, setApiKey] = useState("");
+  const [billingStatus, setBillingStatus] = useState<BillingStatusPayload | null>(null);
+  const [billingMsg, setBillingMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    try {
+      const v = window.localStorage.getItem(API_KEY_LS);
+      if (v) setApiKey(v);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!apiKey || apiKey.length < 8) {
+      setBillingStatus(null);
+      return;
+    }
+    let cancel = false;
+    fetch("/api/billing/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: apiKey }),
+    })
+      .then(async (r) => {
+        const j = (await r.json()) as BillingStatusPayload;
+        if (!cancel) setBillingStatus(j);
+      })
+      .catch(() => {
+        if (!cancel) setBillingStatus(null);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [apiKey]);
 
   useEffect(() => {
     let cancel = false;
@@ -70,6 +118,53 @@ export default function SettingsPage() {
 
   const dq = data?.discord;
 
+  async function persistApiKey() {
+    setBillingMsg(null);
+    try {
+      window.localStorage.setItem(API_KEY_LS, apiKey.trim());
+      setBillingMsg("已保存到浏览器本地。AI 分析师请求请使用 Header：Authorization: Bearer <同一密钥>。");
+    } catch (e: unknown) {
+      setBillingMsg(e instanceof Error ? e.message : "保存失败");
+    }
+  }
+
+  async function startCheckout() {
+    setBillingMsg(null);
+    const k = apiKey.trim();
+    if (k.length < 8) {
+      setBillingMsg("请先输入至少 8 位 API 密钥并保存。");
+      return;
+    }
+    const res = await fetch("/api/billing/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: k }),
+    });
+    const j = (await res.json()) as { url?: string; detail?: unknown };
+    if (!res.ok) {
+      setBillingMsg(typeof j.detail === "string" ? j.detail : "结账创建失败");
+      return;
+    }
+    if (j.url) window.location.href = j.url;
+  }
+
+  async function openPortal() {
+    setBillingMsg(null);
+    const k = apiKey.trim();
+    if (k.length < 8) return;
+    const res = await fetch("/api/billing/portal", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: k }),
+    });
+    const j = (await res.json()) as { url?: string };
+    if (!res.ok) {
+      setBillingMsg("客户门户打开失败（可能尚未完成首次结账）。");
+      return;
+    }
+    if (j.url) window.location.href = j.url;
+  }
+
   return (
     <div className="h-full overflow-y-auto p-6 max-w-3xl mx-auto space-y-6 text-[13px] text-text">
       <header>
@@ -79,11 +174,81 @@ export default function SettingsPage() {
         </p>
       </header>
 
-      <section className="rounded-[10px] border border-border2 bg-panel2 p-4 space-y-2">
-        <h2 className="text-[13px] font-semibold text-muted uppercase tracking-wide">订阅与推送（规划）</h2>
+      <section className="rounded-[10px] border border-border2 bg-panel2 p-4 space-y-3">
+        <h2 className="text-[13px] font-semibold text-muted uppercase tracking-wide">
+          订阅与用量（Stripe）
+        </h2>
         <p className="text-[12px] text-muted leading-relaxed">
-          Free / Pro / Alpha 套餐与 Stripe 结账、Telegram 推送等功能将接入统一账户系统。当前环境不扣费、不限次数演示。
+          自管 API 密钥模式：自定义一串密钥（≥8 字符），在下方完成 Stripe 结账后，后端将其与 Stripe
+          客户绑定。调用 AI 分析师时使用{" "}
+          <code className="text-gold">Authorization: Bearer &lt;密钥&gt;</code>。
+          未配置 Stripe 时本节按钮将不可用；开发环境可继续用后端{" "}
+          <code className="text-gold">SUBSCRIPTION_TOKENS</code>。
         </p>
+        {data?.stripe_billing_configured ? (
+          <p className="text-[11px] text-green">后端已配置 Stripe Price / Secret，可开启结账。</p>
+        ) : (
+          <p className="text-[11px] text-muted">集成状态中 Stripe 未就绪：请在 backend 配置 STRIPE_SECRET_KEY 与 STRIPE_PRICE_ID_PRO。</p>
+        )}
+        <div className="flex flex-col gap-2 max-w-lg">
+          <label className="text-[11px] text-muted uppercase tracking-wide">API 密钥</label>
+          <input
+            type="password"
+            autoComplete="off"
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            className="bg-bg border border-border2 rounded-md px-2 py-1.5 text-text text-[13px] font-mono"
+            placeholder="例如 dev-my-secret-key-01"
+          />
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={persistApiKey}
+              className="text-[12px] px-3 py-1.5 rounded-md border border-border2 text-text hover:border-gold"
+            >
+              保存到本地
+            </button>
+            <button
+              type="button"
+              onClick={startCheckout}
+              disabled={!data?.stripe_billing_configured}
+              className="text-[12px] px-3 py-1.5 rounded-md border border-gold text-gold disabled:opacity-40"
+            >
+              前往 Stripe 结账（Pro）
+            </button>
+            <button
+              type="button"
+              onClick={openPortal}
+              disabled={!data?.stripe_billing_configured}
+              className="text-[12px] px-3 py-1.5 rounded-md border border-border2 text-muted disabled:opacity-40"
+            >
+              管理订阅（客户门户）
+            </button>
+          </div>
+        </div>
+        {billingMsg ? <p className="text-[11px] text-gold whitespace-pre-wrap">{billingMsg}</p> : null}
+        {billingStatus?.registered ? (
+          <dl className="grid grid-cols-2 gap-2 text-[12px] max-w-lg border border-border2 rounded-md p-3 bg-bg/60">
+            <div>
+              <dt className="text-muted">套餐</dt>
+              <dd className="font-mono text-gold">{billingStatus.plan ?? "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">今日 AI 次数</dt>
+              <dd className="font-mono">
+                {billingStatus.agent_queries_today ?? 0} / {billingStatus.free_daily_limit ?? "—"}
+              </dd>
+            </div>
+            <div className="col-span-2">
+              <dt className="text-muted">当前周期结束 (UTC)</dt>
+              <dd className="font-mono text-[11px] break-all">
+                {billingStatus.current_period_end_utc ?? "—"}
+              </dd>
+            </div>
+          </dl>
+        ) : apiKey.length >= 8 ? (
+          <p className="text-[11px] text-muted">该密钥尚未出现在后端登记（完成结账后 Webhook 会写入）。</p>
+        ) : null}
       </section>
 
       {loading ? (

@@ -162,8 +162,76 @@ export async function executeTool(
       }
       case "get_recent_news":
         return JSON.stringify(mockNews(symbol));
-      case "evaluate_strategy":
-        return JSON.stringify(mockStrategyEval(args));
+      case "evaluate_strategy": {
+        if (!API_BASE) {
+          return JSON.stringify({ error: "OPTIONS_AJI_BACKEND_URL not set" });
+        }
+        const m = await fetchBackend(`/market/${encodeURIComponent(symbol)}`);
+        const spot = Number(m.price ?? 0);
+        if (!Number.isFinite(spot) || spot <= 0) {
+          return JSON.stringify({ error: "invalid_spot", symbol });
+        }
+        const strat = typeof args.strategy === "string" ? args.strategy : "long_call";
+        const params = (args.params as Record<string, unknown> | undefined) ?? {};
+        const k = Number(params.strike ?? Math.round(spot));
+        const k2 = Number(params.strike2 ?? Math.max(1, k - Math.max(1, spot * 0.02)));
+        const prem = Number(params.premium ?? 2);
+        const prem2 = Number(params.premium2 ?? 1);
+        const dte = Number(params.days_to_expiry ?? 30);
+        const iv = Number(params.iv ?? 0.35);
+
+        const legs =
+          strat === "credit_put_spread" || strat === "credit_spread"
+            ? [
+                {
+                  side: "sell" as const,
+                  option_type: "put" as const,
+                  strike: k,
+                  premium: prem,
+                  contracts: 1,
+                  days_to_expiry: dte,
+                  iv,
+                },
+                {
+                  side: "buy" as const,
+                  option_type: "put" as const,
+                  strike: k2,
+                  premium: prem2,
+                  contracts: 1,
+                  days_to_expiry: dte,
+                  iv,
+                },
+              ]
+            : [
+                {
+                  side: "buy" as const,
+                  option_type: "call" as const,
+                  strike: k,
+                  premium: prem,
+                  contracts: 1,
+                  days_to_expiry: dte,
+                  iv,
+                },
+              ];
+
+        const res = await fetch(`${API_BASE.replace(/\/$/, "")}/api/strategy/evaluate`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-API-Key": API_KEY,
+          },
+          body: JSON.stringify({
+            symbol,
+            spot,
+            legs,
+          }),
+          cache: "no-store",
+        });
+        if (!res.ok) {
+          return JSON.stringify({ error: `evaluate ${res.status}`, body: await res.text() });
+        }
+        return JSON.stringify(await res.json());
+      }
       default:
         return JSON.stringify({ error: `Unknown tool: ${name}` });
     }
@@ -188,15 +256,3 @@ function mockNews(sym: string) {
   };
 }
 
-function mockStrategyEval(args: Record<string, unknown>) {
-  return {
-    strategy: args.strategy,
-    symbol: args.symbol,
-    recommended: false,
-    confidence: 0,
-    notes: [
-      "策略评估引擎可接 /api/strategy/evaluate；当前为占位返回。",
-      "不构成投资建议。",
-    ],
-  };
-}

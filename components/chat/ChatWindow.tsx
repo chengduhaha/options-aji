@@ -28,7 +28,11 @@ function readOptionalBearerToken(): string | null {
     return fromPublicEnv;
   }
   if (typeof window === "undefined") return null;
-  return window.localStorage.getItem("optionsaji_subscription_token")?.trim() ?? null;
+  return (
+    window.localStorage.getItem("optionsaji_subscription_token")?.trim() ??
+    window.localStorage.getItem("optionsaji_api_key")?.trim() ??
+    null
+  );
 }
 
 export default function ChatWindow() {
