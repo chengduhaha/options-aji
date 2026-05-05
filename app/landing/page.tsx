@@ -2,10 +2,10 @@
 
 import Link from "next/link";
 import { 
-  ArrowRight, BarChart3, Brain, Building2, Calendar, 
-  ChevronRight, Globe, Landmark, Layers, LineChart, 
-  Play, ScanLine, Shield, Sparkles, Star, Target, 
-  TrendingUp, Users, Zap, Check, Activity
+  ArrowRight, BarChart3, Brain, Calendar, 
+  ChevronRight, Globe, Landmark,
+  Play, ScanLine, Sparkles, Star, Target, 
+  Users, Zap, Check, Activity
 } from "lucide-react";
 import { clsx } from "clsx";
 
@@ -362,7 +362,7 @@ export default function LandingPage() {
                 {[
                   "自然语言交互，无需学习复杂指令",
                   "实时接入 GEX、期权链、新闻数据",
-                  "多 Agent 协作，从不同角度分析",
+                  "多 Agent 协作，��不同角度分析",
                   "策略生成与风险评估一站式完成",
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-3">
@@ -562,7 +562,7 @@ export default function LandingPage() {
             <span className="text-[14px] font-semibold text-foreground">OptionsAji</span>
           </div>
           <p className="text-[12px] text-muted text-center">
-            免责声明：本平台仅提供数据分析与教育内容，不构成投资建议。交易有风险，入市需谨慎。
+            免责声明：本平台仅提供数据分析与教���内容，不构成投资建议。交易有风险，入市需谨慎。
           </p>
           <div className="flex items-center gap-4">
             <a href="#" className="text-[13px] text-muted-foreground hover:text-foreground transition-colors">隐私政策</a>

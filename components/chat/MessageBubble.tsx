@@ -1,7 +1,6 @@
 "use client";
 
 import { Brain, Sparkles, User } from "lucide-react";
-import { clsx } from "clsx";
 
 type Message = {
   id: string;

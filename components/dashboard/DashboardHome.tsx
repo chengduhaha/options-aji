@@ -9,8 +9,6 @@ import {
 } from "lucide-react";
 import { clsx } from "clsx";
 import {
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
