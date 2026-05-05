@@ -1,6 +1,6 @@
 {
   "name": "optionsaji",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -15,7 +15,9 @@
     "openai": "^4.98.0",
     "recharts": "^2.15.3",
     "clsx": "^2.1.1",
-    "lucide-react": "^0.511.0"
+    "lucide-react": "^0.511.0",
+    "@tanstack/react-table": "^8.20.0",
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",
