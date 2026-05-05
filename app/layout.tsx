@@ -1,10 +1,10 @@
-import type { Metadata } from "next";
-import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import type { Metadata, Viewport } from "next";
+import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 
-const spaceGrotesk = Space_Grotesk({
+const inter = Inter({
   subsets: ["latin"],
-  variable: "--font-space-grotesk",
+  variable: "--font-inter",
 });
 
 const jetbrainsMono = JetBrains_Mono({
@@ -13,8 +13,20 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "OptionsAji — 期权阿吉",
-  description: "AI 驱动的美股期权分析平台",
+  title: "OptionsAji - AI 期权分析平台",
+  description: "AI 驱动的美股期权分析平台，实时 GEX 分析、期权扫描、智能策略推荐",
+  keywords: ["期权", "美股", "GEX", "AI分析", "期权交易", "Gamma Exposure"],
+  authors: [{ name: "OptionsAji" }],
+  openGraph: {
+    title: "OptionsAji - AI 期权分析平台",
+    description: "AI 驱动的美股期权分析平台",
+    type: "website",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#050a14",
+  colorScheme: "dark",
 };
 
 export default function RootLayout({
@@ -23,8 +35,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="zh" className={`${spaceGrotesk.variable} ${jetbrainsMono.variable}`}>
-      <body className="bg-bg text-text font-ui antialiased">
+    <html lang="zh" className={`${inter.variable} ${jetbrainsMono.variable} bg-background`}>
+      <body className="bg-background text-foreground font-sans antialiased">
         {children}
       </body>
     </html>
