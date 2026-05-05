@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { Globe, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { Globe } from "lucide-react";
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 
 const IMPACT_COLOR: Record<string, string> = {
@@ -52,7 +53,6 @@ export default function MacroPage() {
         <h1 className="text-xl font-bold text-text">宏观经济</h1>
       </div>
 
-      {/* Yield Curve */}
       {yieldCurve.length > 0 && (
         <div className="bg-panel2 border border-border2 rounded-xl p-5">
           <h2 className="text-sm font-semibold text-text mb-1">美国国债收益率曲线</h2>
@@ -81,7 +81,6 @@ export default function MacroPage() {
         </div>
       )}
 
-      {/* Economic Calendar */}
       <div className="bg-panel2 border border-border2 rounded-xl">
         <div className="px-5 py-3 border-b border-border2">
           <h2 className="text-sm font-semibold text-text">经济日历</h2>

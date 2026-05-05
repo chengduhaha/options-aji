@@ -1,7 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useState } from "react";
-import { api } from "@/lib/api";
 import { ListFilter } from "lucide-react";
 
 export default function EarningsPage() {
@@ -9,10 +9,6 @@ export default function EarningsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Use macro calendar as earnings calendar proxy from feed_unified or direct API
-    const today = new Date();
-    const from = today.toISOString().split("T")[0];
-    const to = new Date(today.getTime() + 30 * 86400000).toISOString().split("T")[0];
     fetch(`/api/stock/AAPL/earnings-calendar`)
       .then(r => r.json())
       .then(d => setEvents(d.earnings || []))
@@ -32,7 +28,6 @@ export default function EarningsPage() {
         全市场财报日历功能即将上线。
       </div>
 
-      {/* Placeholder earnings cards */}
       <div className="grid grid-cols-1 gap-3">
         {loading ? (
           <div className="text-center text-muted py-8">加载中...</div>

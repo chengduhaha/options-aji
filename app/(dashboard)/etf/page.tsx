@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -26,7 +27,7 @@ export default function EtfPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(symbol); }, [symbol]);
+  useEffect(() => { load(symbol); }, [symbol]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const sectorPie = sectors.map((s: any) => ({
     name: s.sector || s.sectorName,
@@ -61,14 +62,13 @@ export default function EtfPage() {
       </div>
 
       <div className="grid grid-cols-2 gap-5">
-        {/* Sector Pie */}
         {sectorPie.length > 0 && (
           <div className="bg-panel2 border border-border2 rounded-xl p-5">
             <h2 className="text-sm font-semibold text-text mb-3">板块权重</h2>
             <ResponsiveContainer width="100%" height={240}>
               <PieChart>
                 <Pie data={sectorPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90}>
-                  {sectorPie.map((_, index) => (
+                  {sectorPie.map((_: any, index: number) => (
                     <Cell key={index} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
@@ -79,7 +79,6 @@ export default function EtfPage() {
           </div>
         )}
 
-        {/* Top Holdings */}
         <div className="bg-panel2 border border-border2 rounded-xl p-5">
           <h2 className="text-sm font-semibold text-text mb-3">Top 20 持仓</h2>
           {loading ? (

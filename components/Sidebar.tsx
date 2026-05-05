@@ -5,8 +5,8 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3, BookOpen, Building2, ChevronDown, ChevronRight,
   LayoutDashboard, LineChart, Landmark, ListFilter, Newspaper,
-  RadioTower, ScanLine, Settings, Sparkles, Star, TrendingDown,
-  TrendingUp, Wallet, Globe, Layers,
+  RadioTower, ScanLine, Settings, Sparkles, Star, TrendingUp,
+  Wallet, Globe, Layers,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useState } from "react";
@@ -106,7 +106,7 @@ export default function Sidebar() {
       <nav className="flex-1 px-2 py-2 overflow-y-auto">
         {NAV_GROUPS.map((group, gi) => {
           const key = group.label || "root";
-          const isOpen = collapsed[key] !== false; // default open
+          const isOpen = collapsed[key] !== false;
           return (
             <div key={gi} className="mb-1">
               {group.label && (

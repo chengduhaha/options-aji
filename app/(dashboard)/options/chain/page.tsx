@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
 import { api } from "@/lib/api";
-import { Layers, ArrowUp, ArrowDown } from "lucide-react";
+import { Layers } from "lucide-react";
 import { clsx } from "clsx";
 
 type Contract = {
@@ -94,21 +95,17 @@ export default function OptionsChainPage() {
         )}
       </div>
 
-      {/* Chain Table */}
       <div className="bg-panel2 border border-border2 rounded-xl overflow-x-auto">
         <table className="w-full text-[11px] min-w-[800px]">
           <thead>
             <tr className="border-b border-border2 text-muted">
-              {/* Call side */}
               <th className="text-right px-3 py-2">IV</th>
               <th className="text-right px-3 py-2">Delta</th>
               <th className="text-right px-3 py-2">OI</th>
               <th className="text-right px-3 py-2">量</th>
               <th className="text-right px-3 py-2">买</th>
               <th className="text-right px-3 py-2">卖</th>
-              {/* Strike */}
               <th className="text-center px-4 py-2 bg-white/[0.03] font-bold text-text">行权价</th>
-              {/* Put side */}
               <th className="text-left px-3 py-2">买</th>
               <th className="text-left px-3 py-2">卖</th>
               <th className="text-left px-3 py-2">量</th>
@@ -135,18 +132,15 @@ export default function OptionsChainPage() {
                       isATM && "bg-gold/[0.06] border-gold/20"
                     )}
                   >
-                    {/* Call */}
                     <td className="text-right px-3 py-1.5 text-muted">{call ? `${(call.implied_volatility! * 100).toFixed(1)}%` : "—"}</td>
                     <td className="text-right px-3 py-1.5 text-blue-400">{call ? fmt(call.delta, 3) : "—"}</td>
                     <td className="text-right px-3 py-1.5 text-muted">{call?.open_interest?.toLocaleString() ?? "—"}</td>
                     <td className="text-right px-3 py-1.5 text-muted">{call?.day_volume?.toLocaleString() ?? "—"}</td>
                     <td className="text-right px-3 py-1.5 text-green-400">{call ? fmt(call.bid) : "—"}</td>
                     <td className="text-right px-3 py-1.5 text-red-400">{call ? fmt(call.ask) : "—"}</td>
-                    {/* Strike */}
                     <td className={clsx("text-center px-4 py-1.5 font-bold bg-white/[0.03]", isATM ? "text-gold" : "text-text")}>
                       {strike}
                     </td>
-                    {/* Put */}
                     <td className="text-left px-3 py-1.5 text-green-400">{put ? fmt(put.bid) : "—"}</td>
                     <td className="text-left px-3 py-1.5 text-red-400">{put ? fmt(put.ask) : "—"}</td>
                     <td className="text-left px-3 py-1.5 text-muted">{put?.day_volume?.toLocaleString() ?? "—"}</td>

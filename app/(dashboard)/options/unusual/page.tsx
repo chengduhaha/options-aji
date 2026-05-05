@@ -1,6 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { TrendingUp } from "lucide-react";
 
@@ -10,14 +11,14 @@ export default function UnusualOptionsPage() {
   const [volumeMin, setVolumeMin] = useState(200);
   const [loading, setLoading] = useState(true);
 
-  const load = () => {
+  const load = useCallback(() => {
     setLoading(true);
     api.options.unusual(volOiMin, volumeMin)
       .then((d: any) => setContracts(d.contracts || []))
       .finally(() => setLoading(false));
-  };
+  }, [volOiMin, volumeMin]);
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [load]);
 
   return (
     <div className="p-6 space-y-5">
