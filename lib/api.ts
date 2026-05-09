@@ -42,6 +42,10 @@ export const api = {
       if (volumeMin) params.set("volume_min", String(volumeMin));
       return fetchJSON(`/api/options/unusual?${params}`);
     },
+    atmHistory: (symbol: string, expiration: string, contractType = "call", daysBack = 60) =>
+      fetchJSON(`/api/options/atm-history/${symbol}?expiration=${expiration}&contract_type=${contractType}&days_back=${daysBack}`),
+    bars: (ticker: string, from: string, to: string) =>
+      fetchJSON(`/api/options/bars/${ticker}?from_date=${from}&to_date=${to}`),
   },
 
   stock: {
