@@ -3,8 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3, BookOpen, Building2, ChevronDown, ChevronRight,
-  LayoutDashboard, LineChart, Landmark, ListFilter, Newspaper,
+  BarChart3, BookOpen, ChevronDown, ChevronRight,
+  LayoutDashboard, LineChart, ListFilter, Newspaper,
   RadioTower, ScanLine, Settings, Sparkles, Star, TrendingUp,
   Wallet, Globe, Layers, Zap, Activity,
 } from "lucide-react";
@@ -40,13 +40,6 @@ const NAV_GROUPS = [
       { id: "macro", label: "宏观经济", href: "/macro", icon: Globe },
       { id: "indices", label: "指数行情", href: "/indices", icon: TrendingUp },
       { id: "news", label: "新闻资讯", href: "/news", icon: Newspaper },
-    ],
-  },
-  {
-    label: "机构追踪",
-    items: [
-      { id: "congress", label: "国会交易", href: "/congress", icon: Landmark, badge: "NEW" },
-      { id: "insider", label: "内部人交易", href: "/insider", icon: Building2 },
     ],
   },
   {

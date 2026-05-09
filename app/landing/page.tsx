@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { 
-  ArrowRight, BarChart3, Brain, Calendar, 
-  ChevronRight, Globe, Landmark,
-  Play, ScanLine, Sparkles, Star, Target, 
+import {
+  ArrowRight, BarChart3, Brain, Calendar,
+  ChevronRight, Globe,
+  Play, ScanLine, Sparkles, Star, Target,
   Users, Zap, Check, Activity
 } from "lucide-react";
 import { clsx } from "clsx";
@@ -27,12 +27,6 @@ const FEATURES = [
     title: "期权扫描器",
     description: "实时监控异常期权活动，捕捉机构大单信号",
     color: "from-secondary to-purple",
-  },
-  {
-    icon: Landmark,
-    title: "国会交易追踪",
-    description: "跟踪美国国会议员交易，洞察政策内幕",
-    color: "from-purple to-primary",
   },
   {
     icon: Calendar,
@@ -120,9 +114,9 @@ const TESTIMONIALS = [
     avatar: "SW",
   },
   {
-    quote: "国会交易追踪功能让我第一时间获取政策信号，这是其他平台没有的。",
+    quote: "GEX 快览和 AI 信号配合使用，让我每天开盘前就有完整的交易计划。",
     author: "Mike C.",
-    role: "对冲基金分析师",
+    role: "期权交易员",
     avatar: "MC",
   },
 ];

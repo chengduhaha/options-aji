@@ -82,17 +82,6 @@ export const api = {
       fetchJSON(`/api/macro/indicator?name=${encodeURIComponent(name)}`),
   },
 
-  insider: {
-    latest: (limit?: number) => fetchJSON(`/api/insider/latest${limit ? `?limit=${limit}` : ""}`),
-    bySymbol: (symbol: string) => fetchJSON(`/api/insider/${symbol}`),
-  },
-
-  congress: {
-    latest: (chamber?: string) =>
-      fetchJSON(`/api/congress/latest${chamber ? `?chamber=${chamber}` : ""}`),
-    bySymbol: (symbol: string) => fetchJSON(`/api/congress/${symbol}`),
-  },
-
   etf: {
     list: () => fetchJSON("/api/etf/list"),
     holdings: (symbol: string) => fetchJSON(`/api/etf/${symbol}/holdings`),
