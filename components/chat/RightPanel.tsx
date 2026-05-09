@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { TrendingUp, TrendingDown, Activity, Newspaper, ExternalLink, BarChart3 } from "lucide-react";
+import { clsx } from "clsx";
 
-/** 经 Next `/api/market/*` 代理到 `OPTIONS_AJI_BACKEND_URL`（避免 HTTPS 页直连 HTTP VPS 混合内容阻断）。 */
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "dev-key-change-me";
 
 type MarketData = {
@@ -53,84 +54,143 @@ export default function RightPanel({ ticker }: { ticker: string }) {
   const isUp = chg >= 0;
 
   return (
-    <aside className="w-[290px] flex-shrink-0 border-l border-border2 flex flex-col bg-panel2 overflow-y-auto">
-      {/* Price */}
-      <div className="px-4 pt-4 pb-3 border-b border-border2">
-        <div className="flex items-baseline justify-between mb-1">
-          <span className="text-[13px] font-semibold font-mono text-text">{ticker}</span>
-          <span className={`text-[11px] font-mono ${isUp ? "text-green" : "text-red"}`}>
-            {isUp ? "▲" : "▼"} {Math.abs(chg).toFixed(2)}%
-          </span>
+    <aside className="w-[300px] flex-shrink-0 border-l border-glass-border flex flex-col glass overflow-y-auto">
+      {/* Price Header */}
+      <div className="p-5 border-b border-glass-border">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+              <span className="font-mono font-bold text-primary text-[12px]">{ticker.slice(0, 2)}</span>
+            </div>
+            <div>
+              <span className="text-[15px] font-bold font-mono text-foreground">{ticker}</span>
+              <div className="flex items-center gap-1">
+                {isUp ? (
+                  <TrendingUp className="w-3 h-3 text-green" />
+                ) : (
+                  <TrendingDown className="w-3 h-3 text-red" />
+                )}
+                <span className={clsx(
+                  "text-[11px] font-mono font-medium",
+                  isUp ? "text-green" : "text-red"
+                )}>
+                  {isUp ? "+" : ""}{chg.toFixed(2)}%
+                </span>
+              </div>
+            </div>
+          </div>
+          {loading && <Activity className="w-4 h-4 text-primary animate-pulse" />}
         </div>
-        <div className="text-[26px] font-bold font-mono text-text leading-none">
+        
+        <div className="text-[32px] font-bold font-mono text-foreground leading-none number-display mb-4">
           ${price.toFixed(2)}
         </div>
 
-        {/* Sparkline placeholder */}
-        <svg className="w-full h-12 mt-3" viewBox="0 0 200 48">
-          <defs>
-            <linearGradient id="sg" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={isUp ? "#00D4AA" : "#FF6B6B"} stopOpacity="0.3" />
-              <stop offset="100%" stopColor={isUp ? "#00D4AA" : "#FF6B6B"} stopOpacity="0" />
-            </linearGradient>
-          </defs>
-          <path
-            d={isUp
-              ? "M0 36 L40 30 L80 20 L120 24 L160 14 L200 8"
-              : "M0 12 L40 18 L80 28 L120 24 L160 34 L200 40"}
-            fill="none"
-            stroke={isUp ? "#00D4AA" : "#FF6B6B"}
-            strokeWidth="1.5"
-          />
-          <path
-            d={isUp
-              ? "M0 36 L40 30 L80 20 L120 24 L160 14 L200 8 L200 48 L0 48Z"
-              : "M0 12 L40 18 L80 28 L120 24 L160 34 L200 40 L200 48 L0 48Z"}
-            fill="url(#sg)"
-          />
-        </svg>
+        {/* Sparkline */}
+        <div className="relative h-16 mb-4">
+          <svg className="w-full h-full" viewBox="0 0 200 64" preserveAspectRatio="none">
+            <defs>
+              <linearGradient id="sparkGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={isUp ? "#10b981" : "#ef4444"} stopOpacity="0.3" />
+                <stop offset="100%" stopColor={isUp ? "#10b981" : "#ef4444"} stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path
+              d={isUp
+                ? "M0 48 L40 40 L80 28 L120 32 L160 18 L200 10"
+                : "M0 16 L40 24 L80 36 L120 32 L160 46 L200 54"}
+              fill="none"
+              stroke={isUp ? "#10b981" : "#ef4444"}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <path
+              d={isUp
+                ? "M0 48 L40 40 L80 28 L120 32 L160 18 L200 10 L200 64 L0 64Z"
+                : "M0 16 L40 24 L80 36 L120 32 L160 46 L200 54 L200 64 L0 64Z"}
+              fill="url(#sparkGradient)"
+            />
+          </svg>
+        </div>
 
-        {/* IV / PCR */}
-        <div className="grid grid-cols-3 gap-2 mt-3">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-3 gap-2">
           {[
-            { label: "ATM IV", value: `${iv.toFixed(1)}%` },
-            { label: "IV Rank", value: `${ivRank}%` },
-            { label: "P/C Ratio", value: pcr.toFixed(2) },
+            { label: "ATM IV", value: `${iv.toFixed(1)}%`, color: "text-accent" },
+            { label: "IV Rank", value: `${ivRank}%`, color: ivRank > 50 ? "text-red" : "text-green" },
+            { label: "P/C Ratio", value: pcr.toFixed(2), color: pcr > 1 ? "text-red" : "text-green" },
           ].map((item) => (
-            <div key={item.label} className="bg-bg/60 rounded-[6px] px-2 py-1.5 text-center">
-              <div className="text-[9.5px] text-muted mb-0.5">{item.label}</div>
-              <div className="text-[12px] font-mono font-semibold text-text">{item.value}</div>
+            <div key={item.label} className="glass-subtle rounded-lg px-3 py-2.5 text-center">
+              <div className="text-[9px] text-muted uppercase tracking-wider mb-1">{item.label}</div>
+              <div className={clsx("text-[14px] font-mono font-bold", item.color)}>
+                {item.value}
+              </div>
             </div>
           ))}
         </div>
-        {loading && <div className="text-[10px] text-muted mt-1 text-center">加载中...</div>}
+      </div>
+
+      {/* Quick Stats */}
+      <div className="p-5 border-b border-glass-border">
+        <div className="flex items-center gap-2 mb-3">
+          <BarChart3 className="w-4 h-4 text-primary" />
+          <span className="text-[11px] font-semibold text-foreground uppercase tracking-wider">关键指标</span>
+        </div>
+        <div className="space-y-2">
+          {[
+            { label: "Gamma 环境", value: "正Gamma", status: "positive" },
+            { label: "GEX净值", value: "$2.4B", status: "neutral" },
+            { label: "Put Wall", value: "$540", status: "neutral" },
+            { label: "Call Wall", value: "$560", status: "neutral" },
+          ].map((item) => (
+            <div key={item.label} className="flex items-center justify-between py-1.5">
+              <span className="text-[12px] text-muted">{item.label}</span>
+              <span className={clsx(
+                "text-[12px] font-mono font-medium",
+                item.status === "positive" ? "text-green" : 
+                item.status === "negative" ? "text-red" : "text-foreground"
+              )}>
+                {item.value}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* News */}
-      <div className="flex-1 px-4 pt-3">
-        <div className="text-[10px] text-muted uppercase tracking-widest mb-2">相关资讯</div>
+      <div className="flex-1 p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Newspaper className="w-4 h-4 text-primary" />
+          <span className="text-[11px] font-semibold text-foreground uppercase tracking-wider">相关资讯</span>
+        </div>
         <div className="space-y-3">
           {NEWS.map((n, i) => (
-            <div key={i} className="cursor-pointer group">
-              <div className="flex items-center gap-1.5 mb-1">
+            <div 
+              key={i} 
+              className="group p-3 rounded-lg glass-subtle hover:border-primary/30 transition-all cursor-pointer"
+            >
+              <div className="flex items-center gap-2 mb-2">
                 <span className="text-[10px] text-muted">{n.source}</span>
-                <span className="text-[9px] text-muted/50">{n.time} ago</span>
+                <span className="text-[9px] text-muted/50">{n.time}</span>
                 <span
-                  className={`ml-auto text-[9.5px] font-semibold ${
-                    n.sentiment === "bull" ? "text-green" : n.sentiment === "bear" ? "text-red" : "text-muted"
-                  }`}
+                  className={clsx(
+                    "ml-auto px-1.5 py-0.5 rounded text-[9px] font-bold",
+                    n.sentiment === "bull" ? "bg-green/20 text-green" : 
+                    n.sentiment === "bear" ? "bg-red/20 text-red" : "bg-muted/20 text-muted"
+                  )}
                 >
-                  {n.sentiment === "bull" ? "● 看涨" : n.sentiment === "bear" ? "● 看跌" : "● 中性"}
+                  {n.sentiment === "bull" ? "看涨" : n.sentiment === "bear" ? "看跌" : "中性"}
                 </span>
               </div>
-              <p className="text-[12px] text-text leading-snug group-hover:text-gold transition-colors">
+              <p className="text-[12px] text-muted-foreground leading-relaxed group-hover:text-foreground transition-colors">
                 {n.headline}
               </p>
             </div>
           ))}
         </div>
-        <button className="mt-4 text-[11px] text-muted hover:text-gold transition-colors">
-          查看全部新闻 →
+        <button className="mt-4 flex items-center gap-1.5 text-[11px] text-primary hover:underline">
+          查看全部新闻 <ExternalLink className="w-3 h-3" />
         </button>
       </div>
     </aside>

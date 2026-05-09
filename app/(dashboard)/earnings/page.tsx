@@ -7,12 +7,32 @@ import { ListFilter } from "lucide-react";
 export default function EarningsPage() {
   const [events, setEvents] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   useEffect(() => {
+    setFetchError(null);
     fetch(`/api/stock/AAPL/earnings-calendar`)
-      .then(r => r.json())
-      .then(d => setEvents(d.earnings || []))
-      .catch(() => setEvents([]))
+      .then(async r => {
+        const d = (await r.json()) as {
+          success?: boolean;
+          earnings?: unknown[];
+          error?: { message?: string };
+        };
+        if (!r.ok && d?.error?.message) {
+          throw new Error(d.error.message);
+        }
+        if (d?.success === false && d?.error?.message) {
+          throw new Error(d.error.message);
+        }
+        return d;
+      })
+      .then((d: { earnings?: unknown[] }) =>
+        setEvents(Array.isArray(d.earnings) ? d.earnings : []),
+      )
+      .catch((err: unknown) => {
+        setEvents([]);
+        setFetchError(err instanceof Error ? err.message : String(err));
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -31,9 +51,17 @@ export default function EarningsPage() {
       <div className="grid grid-cols-1 gap-3">
         {loading ? (
           <div className="text-center text-muted py-8">加载中...</div>
+        ) : fetchError ? (
+          <div className="bg-panel2 border border-red-400/30 rounded-xl p-6 text-muted text-sm space-y-2">
+            <p className="text-red-400 font-medium">请求失败</p>
+            <p className="font-mono text-[11px] break-all">{fetchError}</p>
+            <p>
+              若在 Vercel 部署，请设置公网可访问的 OPTIONS_AJI_BACKEND_URL；后端需配置 FMP_API_KEY。
+            </p>
+          </div>
         ) : events.length === 0 ? (
           <div className="bg-panel2 border border-border2 rounded-xl p-6 text-center text-muted text-sm">
-            暂无数据 — 请配置 FMP API Key 后同步数据
+            暂无数据 — 请在 FastAPI 服务端配置 FMP_API_KEY 并同步财报数据（或使用个股深度页查看单标的）
           </div>
         ) : (
           events.map((ev: any, i: number) => (

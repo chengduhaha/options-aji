@@ -260,7 +260,8 @@ export default function SettingsPage() {
           <div className="font-semibold mb-1 text-text">未能拉取后端状态</div>
           {errorText}
           <div className="mt-2 text-muted text-[11px]">
-            本地开发需在 Next `.env.local` 配置 OPTIONS_AJI_BACKEND_URL（指向 uvicorn，例如 http://127.0.0.1:8787）。
+            本地开发：在 Next `.env.local` 配置 OPTIONS_AJI_BACKEND_URL（例如 http://127.0.0.1:8787）。
+            Vercel 部署：必须填写公网可达的后端地址（不可填 localhost），否则所有 /api 代理与 Agent SSE 都会失败。
           </div>
         </div>
       ) : data ? (
