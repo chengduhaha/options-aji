@@ -121,7 +121,10 @@ function OptionsPriceHistory({ symbol }: { symbol: string }) {
         const expsData = await expsRes.json() as { expirations?: string[] };
         const exps = expsData.expirations ?? [];
         if (exps.length === 0) { setLoading(false); return; }
-        const expiry = exps[0];
+        // Pick the nearest future expiration
+        const today = new Date().toISOString().slice(0, 10);
+        const future = exps.filter(e => e >= today);
+        const expiry = future.length > 0 ? future[0] : exps[0];
 
         const [callRes, putRes] = await Promise.all([
           fetch(`/api/options/atm-history/${encodeURIComponent(symbol)}?expiration=${expiry}&contract_type=call&days_back=60`, {
