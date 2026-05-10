@@ -86,13 +86,13 @@ export default function DashboardHome() {
   }, []);
 
   const loadAi = useCallback(async () => {
-    const res = await fetch("/api/market/ai-summary", {
+    const res = await fetch("/api/agent/brief", {
       headers: { "X-API-Key": API_KEY },
       cache: "no-store",
     });
     if (!res.ok) return;
-    const j = (await res.json()) as { text?: string };
-    if (j.text) setAiText(j.text);
+    const j = (await res.json()) as { brief?: string };
+    if (j.brief) setAiText(j.brief);
   }, []);
 
   useEffect(() => {

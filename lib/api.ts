@@ -25,6 +25,7 @@ export const api = {
     indices: () => fetchJSON("/api/market/indices"),
     overview: () => fetchJSON("/api/market/overview"),
     aiSummary: () => fetchJSON("/api/market/ai-summary"),
+    brief: () => fetchJSON("/api/agent/brief"),
   },
 
   options: {
