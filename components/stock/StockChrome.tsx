@@ -9,6 +9,7 @@ const HOT = ["SPY", "QQQ", "AAPL", "TSLA", "NVDA", "AMZN", "MSFT", "META"];
 
 const TABS: { segment: string; label: string }[] = [
   { segment: "", label: "概览" },
+  { segment: "analyst", label: "分析" },
   { segment: "chain", label: "期权链" },
   { segment: "volatility", label: "波动率" },
   { segment: "financials", label: "财务" },
