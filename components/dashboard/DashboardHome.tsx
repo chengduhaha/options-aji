@@ -7,6 +7,7 @@ import {
   Zap, AlertTriangle, Calendar, ArrowUpRight,
   BarChart3, Brain, Signal, ChevronRight
 } from "lucide-react";
+import FusionCard from "@/components/shared/FusionCard";
 import { clsx } from "clsx";
 import {
   ResponsiveContainer,
@@ -211,6 +212,8 @@ export default function DashboardHome() {
             </div>
           )}
         </section>
+
+        <FusionCard endpoint="market" />
 
         {/* AI Signals Banner */}
         <section className="glass rounded-xl p-4 border border-primary/20 overflow-hidden relative">
