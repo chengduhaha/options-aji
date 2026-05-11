@@ -23,9 +23,30 @@ interface OverviewPayload {
   bar?: { price?: number; changePct?: number };
 }
 
+interface PriceTargetPayload {
+  summary?: {
+    lastMonthAvgPriceTarget?: number;
+    lastQuarterAvgPriceTarget?: number;
+    lastYearAvgPriceTarget?: number;
+    allTimeAvgPriceTarget?: number;
+    lastMonthCount?: number;
+    allTimeCount?: number;
+  } | null;
+  consensus?: {
+    priceTarget?: number;
+    high?: number;
+    low?: number;
+    median?: number;
+    buyCount?: number;
+    holdCount?: number;
+    sellCount?: number;
+  } | null;
+}
+
 export default function StockOverviewPage({ symbol }: { symbol: string }) {
   const [data, setData] = useState<OverviewPayload | null>(null);
   const [range, setRange] = useState<"1M" | "3M" | "6M" | "1Y">("3M");
+  const [pt, setPt] = useState<PriceTargetPayload | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,6 +58,15 @@ export default function StockOverviewPage({ symbol }: { symbol: string }) {
       if (!res.ok || cancelled) return;
       const j = (await res.json()) as OverviewPayload;
       if (!cancelled) setData(j);
+    })();
+    (async () => {
+      const res = await fetch(`/api/analyst/${encodeURIComponent(symbol)}/price-target`, {
+        headers: { "X-API-Key": API_KEY },
+        cache: "no-store",
+      });
+      if (!res.ok || cancelled) return;
+      const j = (await res.json()) as PriceTargetPayload;
+      if (!cancelled) setPt(j);
     })();
     return () => {
       cancelled = true;
@@ -161,6 +191,66 @@ export default function StockOverviewPage({ symbol }: { symbol: string }) {
           </Link>
         </div>
       </div>
+
+      {/* Analyst Price Targets */}
+      {pt?.summary && pt.summary.lastMonthAvgPriceTarget && data?.bar?.price && (
+        <div className="bg-panel border border-border2 rounded-[10px] p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[12px] font-semibold text-text">分析师价格目标</h3>
+            {pt.summary.lastMonthCount != null && (
+              <span className="text-[10px] text-muted">{pt.summary.lastMonthCount} 位分析师</span>
+            )}
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {[
+              { label: "当前价格", value: data.bar.price, pct: null, color: "text-text" },
+              { label: "近月目标", value: pt.summary.lastMonthAvgPriceTarget, pct: ((pt.summary.lastMonthAvgPriceTarget! - data.bar.price) / data.bar.price) * 100, color: "text-green" },
+              { label: "近季目标", value: pt.summary.lastQuarterAvgPriceTarget, pct: ((pt.summary.lastQuarterAvgPriceTarget ?? 0) - data.bar.price) / data.bar.price * 100, color: "text-green" },
+              { label: "历史平均", value: pt.summary.allTimeAvgPriceTarget, pct: ((pt.summary.allTimeAvgPriceTarget! - data.bar.price) / data.bar.price) * 100, color: "text-gold" },
+            ].filter((c): c is { label: string; value: number; pct: number | null; color: string } => c.value != null).map((c) => (
+              <div key={c.label} className="bg-panel2 border border-border2 rounded-[8px] px-3 py-2.5">
+                <div className="text-[10px] text-muted">{c.label}</div>
+                <div className={`text-[15px] font-mono ${c.color} mt-0.5`}>
+                  ${Number(c.value).toFixed(2)}
+                </div>
+                {c.pct != null && (
+                  <div className={`text-[10px] font-mono mt-0.5 ${c.pct >= 0 ? "text-green" : "text-red"}`}>
+                    {c.pct >= 0 ? "+" : ""}{c.pct.toFixed(1)}%
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          {pt?.consensus && (
+            <div className="flex flex-wrap gap-3 mt-4 pt-3 border-t border-border2">
+              {pt.consensus.high != null && (
+                <div className="text-[11px]"><span className="text-muted">最高：</span><span className="font-mono text-text">${pt.consensus.high.toFixed(2)}</span></div>
+              )}
+              {pt.consensus.median != null && (
+                <div className="text-[11px]"><span className="text-muted">中位数：</span><span className="font-mono text-gold">${pt.consensus.median.toFixed(2)}</span></div>
+              )}
+              {pt.consensus.low != null && (
+                <div className="text-[11px]"><span className="text-muted">最低：</span><span className="font-mono text-text">${pt.consensus.low.toFixed(2)}</span></div>
+              )}
+              {pt.consensus.buyCount != null && (
+                <div className="text-[11px]"><span className="text-green">买入 {pt.consensus.buyCount}</span></div>
+              )}
+              {pt.consensus.holdCount != null && (
+                <div className="text-[11px]"><span className="text-gold">持有 {pt.consensus.holdCount}</span></div>
+              )}
+              {pt.consensus.sellCount != null && (
+                <div className="text-[11px]"><span className="text-red">卖出 {pt.consensus.sellCount}</span></div>
+              )}
+            </div>
+          )}
+          <Link
+            href={`/stock/${symbol}/analyst`}
+            className="inline-block mt-3 text-[11px] text-blue hover:underline"
+          >
+            查看全部分析师评级 →
+          </Link>
+        </div>
+      )}
 
       <p className="text-[10px] text-muted text-center pb-4">
         本平台仅提供数据分析与教育内容，不构成投资建议。

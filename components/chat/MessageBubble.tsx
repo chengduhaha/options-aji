@@ -1,8 +1,9 @@
 "use client";
 
 import { Brain, Sparkles, User } from "lucide-react";
+import StructuredOutput, { parseStructuredData } from "./StructuredOutput";
 
-type Message = {
+export type Message = {
   id: string;
   role: "user" | "assistant";
   content: string;
@@ -39,7 +40,7 @@ export default function MessageBubble({ message }: { message: Message }) {
             </span>
             <span className="text-[10px] text-muted">SSE 实时推送</span>
           </div>
-          
+
           <div className="glass rounded-xl p-4 border border-primary/20">
             <div className="max-h-48 overflow-y-auto font-mono text-[11px] leading-relaxed space-y-1.5">
               {(message.thinkingLines ?? []).length === 0 ? (
@@ -49,8 +50,8 @@ export default function MessageBubble({ message }: { message: Message }) {
                 </div>
               ) : (
                 message.thinkingLines?.map((row, idx) => (
-                  <div 
-                    key={`${idx}-${row.slice(0, 48)}`} 
+                  <div
+                    key={`${idx}-${row.slice(0, 48)}`}
                     className="flex items-start gap-2 text-muted-foreground whitespace-pre-wrap break-words"
                   >
                     <span className="text-primary/50 flex-shrink-0">{String(idx + 1).padStart(2, "0")}.</span>
@@ -60,7 +61,7 @@ export default function MessageBubble({ message }: { message: Message }) {
               )}
             </div>
           </div>
-          
+
           <div className="flex items-center gap-2 text-[11px] text-muted">
             <div className="flex gap-1">
               <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
@@ -74,7 +75,9 @@ export default function MessageBubble({ message }: { message: Message }) {
     );
   }
 
-  // AI response
+  // AI response with structured output support
+  const { cleanText, data } = parseStructuredData(message.content);
+
   return (
     <div className="flex gap-3 animate-fade-up">
       <AvatarOA />
@@ -84,9 +87,12 @@ export default function MessageBubble({ message }: { message: Message }) {
             <Sparkles className="w-4 h-4 text-primary" />
             <span className="text-[12px] font-semibold text-primary">OptionsAji AI</span>
           </div>
-          <div className="text-[14px] text-foreground leading-relaxed whitespace-pre-wrap break-words">
-            {message.content}
-          </div>
+          {cleanText && (
+            <div className="text-[14px] text-foreground leading-relaxed whitespace-pre-wrap break-words mb-2">
+              {cleanText}
+            </div>
+          )}
+          {data && <StructuredOutput data={data} />}
         </div>
       </div>
     </div>

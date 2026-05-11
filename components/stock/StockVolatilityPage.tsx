@@ -95,6 +95,98 @@ export default function StockVolatilityPage({ symbol }: { symbol: string }) {
           </div>
         </div>
       </div>
+
+      {/* Options Price History */}
+      <OptionsPriceHistory symbol={symbol} />
+    </div>
+  );
+}
+
+function OptionsPriceHistory({ symbol }: { symbol: string }) {
+  const [callData, setCallData] = useState<{ bars: { timestamp: number; close: number }[]; strike?: number; expiration?: string; ticker?: string } | null>(null);
+  const [putData, setPutData] = useState<{ bars: { timestamp: number; close: number }[]; strike?: number } | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let c = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const expsRes = await fetch(`/api/options/expirations/${encodeURIComponent(symbol)}`, {
+          headers: { "X-API-Key": API_KEY }, cache: "no-store",
+        });
+        if (!expsRes.ok || c) { setLoading(false); return; }
+        const expsData = await expsRes.json() as { expirations?: string[] };
+        const exps = expsData.expirations ?? [];
+        if (exps.length === 0) { setLoading(false); return; }
+        // Pick the nearest future expiration
+        const today = new Date().toISOString().slice(0, 10);
+        const future = exps.filter(e => e >= today);
+        const expiry = future.length > 0 ? future[0] : exps[0];
+
+        const [callRes, putRes] = await Promise.all([
+          fetch(`/api/options/atm-history/${encodeURIComponent(symbol)}?expiration=${expiry}&contract_type=call&days_back=60`, {
+            headers: { "X-API-Key": API_KEY }, cache: "no-store",
+          }),
+          fetch(`/api/options/atm-history/${encodeURIComponent(symbol)}?expiration=${expiry}&contract_type=put&days_back=60`, {
+            headers: { "X-API-Key": API_KEY }, cache: "no-store",
+          }),
+        ]);
+        if (!c) {
+          if (callRes.ok) setCallData(await callRes.json() as typeof callData);
+          if (putRes.ok) setPutData(await putRes.json() as typeof putData);
+        }
+      } catch (err) {
+        if (!c) setError(err instanceof Error ? err.message : String(err));
+      }
+      if (!c) setLoading(false);
+    })();
+    return () => { c = true; };
+  }, [symbol]);
+
+  const callBars = (callData?.bars ?? []).map(b => ({ ...b, t: new Date(b.timestamp / 1000000).toISOString().slice(0, 10) }));
+  const putBars = (putData?.bars ?? []).map(b => ({ ...b, t: new Date(b.timestamp / 1000000).toISOString().slice(0, 10) }));
+
+  const dateSet = new Set([...callBars.map(b => b.t), ...putBars.map(b => b.t)]);
+  const merged = Array.from(dateSet).sort().map(d => ({
+    t: d,
+    call: callBars.find(b => b.t === d)?.close ?? null,
+    put: putBars.find(b => b.t === d)?.close ?? null,
+  }));
+
+  if (loading) return null;
+  if (error || merged.length === 0) return null;
+
+  return (
+    <div className="bg-panel border border-border2 rounded-[10px] p-4">
+      <div className="flex items-center justify-between mb-3">
+        <div>
+          <h3 className="text-[12px] font-semibold text-text">ATM 期权价格历史（近月）</h3>
+          <p className="text-[10px] text-muted mt-0.5">
+            {callData?.ticker && <span className="font-mono">{callData.ticker} | </span>}
+            Call: ${callData?.strike ?? "—"} · Put: ${putData?.strike ?? "—"}
+          </p>
+        </div>
+        <div className="flex gap-3 text-[10px]">
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green" /> Call</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red" /> Put</span>
+        </div>
+      </div>
+      <div className="h-48">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={merged}>
+            <XAxis dataKey="t" tick={{ fontSize: 9, fill: "#8B8D97" }} />
+            <YAxis tick={{ fontSize: 9, fill: "#8B8D97" }} width={48} domain={["auto", "auto"]} />
+            <Tooltip
+              contentStyle={{ background: "#111D2E", border: "1px solid rgba(212,175,55,0.2)", fontSize: 12 }}
+            />
+            <Line type="monotone" dataKey="call" stroke="#10b981" strokeWidth={1.5} dot={false} name="Call" />
+            <Line type="monotone" dataKey="put" stroke="#ef4444" strokeWidth={1.5} dot={false} name="Put" />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
     </div>
   );
 }

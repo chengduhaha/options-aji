@@ -6,7 +6,7 @@ import {
   BarChart3, BookOpen, ChevronDown, ChevronRight,
   LayoutDashboard, LineChart, ListFilter, Newspaper,
   RadioTower, ScanLine, Settings, Sparkles, Star, TrendingUp,
-  Wallet, Globe, Layers, Zap, Activity,
+  Wallet, Globe, Layers, Zap, Activity, Briefcase,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useState } from "react";
@@ -47,6 +47,7 @@ const NAV_GROUPS = [
     items: [
       { id: "etf", label: "ETF 分析", href: "/etf", icon: Wallet },
       { id: "feed", label: "实时信号", href: "/feed", icon: RadioTower },
+      { id: "portfolio", label: "投资组合", href: "/portfolio", icon: Briefcase },
       { id: "ai", label: "AI 助手", href: "/ai", icon: Sparkles, badge: "AI" },
       { id: "learn", label: "期权学院", href: "/learn", icon: BookOpen },
       { id: "settings", label: "设置", href: "/settings", icon: Settings },

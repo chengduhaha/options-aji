@@ -7,6 +7,7 @@ import {
   Zap, AlertTriangle, Calendar, ArrowUpRight,
   BarChart3, Brain, Signal, ChevronRight
 } from "lucide-react";
+import FusionCard from "@/components/shared/FusionCard";
 import { clsx } from "clsx";
 import {
   ResponsiveContainer,
@@ -86,13 +87,13 @@ export default function DashboardHome() {
   }, []);
 
   const loadAi = useCallback(async () => {
-    const res = await fetch("/api/market/ai-summary", {
+    const res = await fetch("/api/agent/brief", {
       headers: { "X-API-Key": API_KEY },
       cache: "no-store",
     });
     if (!res.ok) return;
-    const j = (await res.json()) as { text?: string };
-    if (j.text) setAiText(j.text);
+    const j = (await res.json()) as { brief?: string };
+    if (j.brief) setAiText(j.brief);
   }, []);
 
   useEffect(() => {
@@ -211,6 +212,8 @@ export default function DashboardHome() {
             </div>
           )}
         </section>
+
+        <FusionCard endpoint="market" />
 
         {/* AI Signals Banner */}
         <section className="glass rounded-xl p-4 border border-primary/20 overflow-hidden relative">

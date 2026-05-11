@@ -79,6 +79,7 @@ export default function ChatWindow() {
         await runAgentViaSseStream({
           question,
           ticker,
+          mode,
           bearerToken: readOptionalBearerToken(),
           thinkingMsgId: thinkingMsg.id,
           setMessages,
