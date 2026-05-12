@@ -10,7 +10,17 @@ type StrikeData = {
   iv: number;
 };
 
-export default function GexChart({ ticker, strikes, price }: { ticker: string; strikes: StrikeData[]; price: number }) {
+export default function GexChart({
+  ticker,
+  strikes,
+  price,
+  gammaFlip,
+}: {
+  ticker: string;
+  strikes: StrikeData[];
+  price: number;
+  gammaFlip?: number;
+}) {
   if (!strikes || strikes.length === 0) return null;
 
   const W = 700, H = 260, PL = 48, PR = 20, PT = 10, PB = 30;
@@ -39,12 +49,35 @@ export default function GexChart({ ticker, strikes, price }: { ticker: string; s
 
   const midY = PT + chartH / 2;
 
-  const refLines = [
+  const refLines: Array<{ val: number; color: string; dash: string; label: string }> = [
     { val: price, color: "#D4AF37", dash: "5,3", label: `${ticker} $${price.toFixed(2)}` },
   ];
+  if (
+    typeof gammaFlip === "number" &&
+    gammaFlip > 0 &&
+    !Number.isNaN(gammaFlip) &&
+    Math.abs(gammaFlip - price) > 1e-3
+  ) {
+    refLines.push({
+      val: gammaFlip,
+      color: "#C084FC",
+      dash: "4,4",
+      label: `Γ flip $${gammaFlip.toFixed(2)}`,
+    });
+  }
 
   return (
     <div className="w-full overflow-x-auto">
+      <div className="text-[11px] text-muted mb-2 leading-relaxed space-y-1 px-0.5">
+        <p>
+          <span className="text-green font-medium">绿色柱</span>= Call GEX；{" "}
+          <span className="text-red font-medium">红色柱</span>= Put GEX；
+          中间浅线为 Net GEX = 0。
+        </p>
+        <p className="text-[10px]">
+          金色虚线：现价 <span className="font-mono">{ticker}</span>；紫色虚线（如有）：Gamma Flip。
+        </p>
+      </div>
       <svg
         width="100%"
         viewBox={`0 0 ${W} ${H}`}

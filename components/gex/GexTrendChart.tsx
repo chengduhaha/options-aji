@@ -1,75 +1,105 @@
 "use client";
 
-const TREND_DAYS = ["4/21", "4/22", "4/23", "4/24", "4/25", "4/26", "4/27"];
+import {
+  CartesianGrid,
+  Legend,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
-function trendData(isPositive: boolean) {
-  if (isPositive) return [0.8, 1.2, 1.8, 1.4, 2.1, 1.9, 2.3];
-  return [1.2, 0.6, 0.1, -0.2, -0.4, -0.6, -0.4];
-}
+export type HistRow = {
+  date: string;
+  net?: number;
+  flip?: number;
+  close?: number;
+};
 
-export default function GexTrendChart({ isPositive }: { ticker: string; isPositive: boolean }) {
-  const data = trendData(isPositive);
-  const W = 340, H = 140, PL = 40, PR = 10, PT = 10, PB = 24;
-  const chartW = W - PL - PR;
-  const chartH = H - PT - PB;
-
-  const max = Math.max(...data.map(Math.abs), 0.1);
-  const zero = PT + chartH * (max / (max * 2));
-
-  const toX = (i: number) => PL + (i / (data.length - 1)) * chartW;
-  const toY = (v: number) => zero - (v / max) * (chartH / 2 - 4);
-
-  const pts = data.map((v, i) => `${toX(i)},${toY(v)}`).join(" ");
-  const color = isPositive ? "#00D4AA" : "#FF6B6B";
-
-  const areaPath = `M${toX(0)},${toY(data[0])} ` +
-    data.slice(1).map((v, i) => `L${toX(i + 1)},${toY(v)}`).join(" ") +
-    ` L${toX(data.length - 1)},${zero} L${toX(0)},${zero} Z`;
+export default function GexTrendChart(props: {
+  merged: HistRow[];
+  symbol: string;
+}) {
+  const { merged, symbol } = props;
+  if (!merged.length) {
+    return (
+      <div className="text-muted text-[12px] py-8 text-center leading-relaxed">
+        暂无 GEX 趋势数据。多次载入本页后会将每日 Net / Flip 快照写入后端 Redis；收盘价来自 Yahoo
+        日线。首次部署或冷启动时曲线可能稀疏。
+      </div>
+    );
+  }
 
   return (
-    <svg width="100%" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet">
-      <defs>
-        <linearGradient id="trend-g" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={color} stopOpacity="0.3" />
-          <stop offset="100%" stopColor={color} stopOpacity="0" />
-        </linearGradient>
-      </defs>
-
-      {/* Zero line */}
-      <line x1={PL} y1={zero} x2={PL + chartW} y2={zero} stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
-
-      {/* Y labels */}
-      {[max, 0, -max].map((v) => (
-        <text key={v} x={PL - 4} y={toY(v) + 4} textAnchor="end" fontSize="9" fill="#8B8D97">
-          {v >= 0 ? "+" : ""}{v.toFixed(1)}B
-        </text>
-      ))}
-
-      {/* Area */}
-      <path d={areaPath} fill="url(#trend-g)" />
-
-      {/* Line */}
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.8" strokeLinejoin="round" />
-
-      {/* Dots */}
-      {data.map((v, i) => (
-        <circle key={i} cx={toX(i)} cy={toY(v)} r="2.5" fill={color} />
-      ))}
-
-      {/* Regime change annotation */}
-      {!isPositive && (
-        <g>
-          <line x1={toX(2)} y1={PT} x2={toX(2)} y2={PT + chartH} stroke="rgba(212,175,55,0.4)" strokeWidth="1" strokeDasharray="3,2" />
-          <text x={toX(2) + 3} y={PT + 10} fontSize="8.5" fill="#D4AF37">Regime↓</text>
-        </g>
-      )}
-
-      {/* X labels */}
-      {TREND_DAYS.map((d, i) => (
-        <text key={d} x={toX(i)} y={H - 6} textAnchor="middle" fontSize="9" fill="#8B8D97">
-          {d}
-        </text>
-      ))}
-    </svg>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="min-h-[240px]" data-testid={`gex-trend-net-${symbol}`}>
+        <div className="text-[11px] text-muted mb-1">Net GEX vs 收盘价</div>
+        <ResponsiveContainer width="100%" height={220}>
+          <LineChart data={merged} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+            <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#8B8D97" }} minTickGap={24} />
+            <YAxis yAxisId="gx" tick={{ fontSize: 9, fill: "#8B8D97" }} width={44} domain={["auto", "auto"]} />
+            <YAxis yAxisId="px" orientation="right" tick={{ fontSize: 9, fill: "#D4AF37" }} width={36} hide />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "#111D2E",
+                borderColor: "rgba(212,175,55,0.2)",
+                fontSize: 11,
+              }}
+            />
+            <Legend wrapperStyle={{ fontSize: 10 }} />
+            <Line
+              yAxisId="gx"
+              type="monotone"
+              dataKey="net"
+              name="Net GEX (Bn)"
+              stroke="#00D4AA"
+              dot={false}
+              strokeWidth={1.8}
+              connectNulls
+            />
+            <Line
+              yAxisId="px"
+              type="monotone"
+              dataKey="close"
+              name="Underlying"
+              stroke="#D4AF37"
+              dot={false}
+              strokeWidth={1.2}
+              connectNulls
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="min-h-[240px]">
+        <div className="text-[11px] text-muted mb-1">Gamma Flip 估算</div>
+        <ResponsiveContainer width="100%" height={220}>
+          <LineChart data={merged} margin={{ top: 4, right: 8, left: -12, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" />
+            <XAxis dataKey="date" tick={{ fontSize: 9, fill: "#8B8D97" }} minTickGap={24} />
+            <YAxis tick={{ fontSize: 9, fill: "#8B8D97" }} width={44} domain={["auto", "auto"]} />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "#111D2E",
+                borderColor: "rgba(212,175,55,0.2)",
+                fontSize: 11,
+              }}
+            />
+            <Legend wrapperStyle={{ fontSize: 10 }} />
+            <Line
+              type="monotone"
+              dataKey="flip"
+              name="Gamma flip"
+              stroke="#FF6B6B"
+              dot={false}
+              strokeWidth={1.7}
+              connectNulls
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
   );
 }

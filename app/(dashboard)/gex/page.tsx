@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
 import { clsx } from "clsx";
 import GexChart from "@/components/gex/GexChart";
-import GexTrendChart from "@/components/gex/GexTrendChart";
+import GexTrendChart, { type HistRow } from "@/components/gex/GexTrendChart";
 
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY || "dev-key-change-me";
 
@@ -32,6 +32,12 @@ type GexProfile = {
   regime: string;
   strikes: StrikeData[];
   timestamp: string;
+  underlyingPrice?: number;
+};
+
+type GexHistApi = {
+  gexSeries: Array<{ date?: string; netGex?: number; gammaFlip?: number | null }>;
+  priceCloses: Array<{ date: string; close: number }>;
 };
 
 export default function GexPage() {
@@ -39,6 +45,30 @@ export default function GexPage() {
   const [expiry, setExpiry] = useState("All Expirations");
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState<GexProfile | null>(null);
+  const [hist, setHist] = useState<GexHistApi | null>(null);
+
+  const merged = useMemo((): HistRow[] => {
+    if (!hist) return [];
+    const byDay: Record<string, HistRow> = {};
+    for (const g of hist.gexSeries ?? []) {
+      const dk = (g.date ?? "").slice(0, 10);
+      if (!dk) continue;
+      byDay[dk] = {
+        date: dk,
+        net: typeof g.netGex === "number" ? g.netGex : undefined,
+        flip: typeof g.gammaFlip === "number" ? g.gammaFlip : undefined,
+        close: byDay[dk]?.close,
+      };
+    }
+    for (const c of hist.priceCloses ?? []) {
+      const dk = c.date.slice(0, 10);
+      const prev = byDay[dk];
+      byDay[dk] = { date: dk, net: prev?.net, flip: prev?.flip, close: c.close };
+    }
+    return Object.keys(byDay)
+      .sort()
+      .map((k) => byDay[k]!);
+  }, [hist]);
 
   const fetchProfile = async (sym: string) => {
     try {
@@ -46,24 +76,49 @@ export default function GexPage() {
         headers: { "X-API-Key": API_KEY },
       });
       if (!res.ok) throw new Error("Failed");
-      const data = await res.json();
+      const data = (await res.json()) as GexProfile;
       setProfile(data);
     } catch {
       setProfile(null);
     }
   };
 
+  const fetchHist = useCallback(async (sym: string) => {
+    try {
+      const res = await fetch(`/api/stock/${encodeURIComponent(sym)}/gex/history`, {
+        headers: { "X-API-Key": API_KEY },
+        cache: "no-store",
+      });
+      if (!res.ok) return;
+      setHist((await res.json()) as GexHistApi);
+    } catch {
+      setHist(null);
+    }
+  }, []);
+
   useEffect(() => {
-    fetchProfile(ticker);
+    void fetchHist(ticker);
+  }, [ticker, fetchHist]);
+
+  useEffect(() => {
+    void fetchProfile(ticker);
   }, [ticker]);
 
   const refresh = () => {
     setRefreshing(true);
-    fetchProfile(ticker).finally(() => setTimeout(() => setRefreshing(false), 600));
+    Promise.all([fetchProfile(ticker), fetchHist(ticker)]).finally(() =>
+      setTimeout(() => setRefreshing(false), 600),
+    );
   };
 
   const d = profile;
   const isPositive = d ? d.netGex >= 0 : true;
+  const spot =
+    d?.underlyingPrice && d.underlyingPrice > 0
+      ? d.underlyingPrice
+      : d?.strikes?.length
+        ? d.strikes[Math.floor(d.strikes.length / 2)]!.strike
+        : 0;
 
   return (
     <div className="flex flex-col h-full overflow-y-auto bg-bg">
@@ -170,17 +225,17 @@ export default function GexPage() {
             </div>
           </div>
           {d && d.strikes ? (
-            <GexChart ticker={ticker} strikes={d.strikes} price={d.strikes.length > 0 ? d.strikes[Math.floor(d.strikes.length/2)].strike : 0} />
+            <GexChart ticker={ticker} strikes={d.strikes} price={spot} gammaFlip={d.gammaFlip} />
           ) : (
             <div className="h-[260px] flex items-center justify-center text-muted text-[13px]">加载中...</div>
           )}
         </div>
 
         {/* Bottom row */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-panel border border-border2 rounded-[10px] p-4">
-            <div className="text-[12px] font-semibold text-text mb-3">Net GEX 5日趋势</div>
-            <GexTrendChart ticker={ticker} isPositive={isPositive} />
+            <div className="text-[12px] font-semibold text-text mb-3">Net GEX 趋势</div>
+            <GexTrendChart merged={merged} symbol={ticker} />
           </div>
 
           <div className="bg-panel border border-border2 rounded-[10px] p-4">
