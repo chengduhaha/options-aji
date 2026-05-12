@@ -27,7 +27,9 @@ export default function EtfPage() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { load(symbol); }, [symbol]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    load(symbol);
+  }, [symbol]);
 
   const sectorPie = sectors.map((s: any) => ({
     name: s.sector || s.sectorName,
