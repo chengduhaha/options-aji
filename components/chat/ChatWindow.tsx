@@ -21,7 +21,15 @@ const QUICK_PROMPTS = [
 ];
 
 const TICKERS = ["SPY", "QQQ", "AAPL", "TSLA", "NVDA", "AMZN", "MSFT", "META", "GOOGL"];
-const MODES = ["快速问答", "深度分析", "策略评估"] as const;
+
+/** Backend expects `^(fast|analysis|strategy)$`; UI labels stay Chinese. */
+const MODES = ["fast", "analysis", "strategy"] as const;
+type AgentMode = (typeof MODES)[number];
+const MODE_LABELS: Record<AgentMode, string> = {
+  fast: "快速问答",
+  analysis: "深度分析",
+  strategy: "策略评估",
+};
 
 const USE_AGENT_SSE = process.env.NEXT_PUBLIC_USE_AGENT_SSE === "1";
 
@@ -43,7 +51,7 @@ export default function ChatWindow() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [ticker, setTicker] = useState("SPY");
-  const [mode, setMode] = useState<(typeof MODES)[number]>("快速问答");
+  const [mode, setMode] = useState<AgentMode>("fast");
   const [rightOpen, setRightOpen] = useState(true);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -166,7 +174,7 @@ export default function ChatWindow() {
                     : "text-muted-foreground hover:text-foreground hover:bg-glass"
                 )}
               >
-                {m}
+                {MODE_LABELS[m]}
               </button>
             ))}
           </div>
