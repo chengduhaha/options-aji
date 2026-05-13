@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import clsx from "clsx";
+import { useAuth } from "@/lib/auth-context";
 
 type IntegrationPayload = {
   generated_at_utc?: string;
@@ -43,6 +45,7 @@ type BillingStatusPayload = {
 };
 
 export default function SettingsPage() {
+  const { user, logout, isAdmin } = useAuth();
   const [data, setData] = useState<IntegrationPayload | null>(null);
   const [errorText, setErrorText] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -173,6 +176,47 @@ export default function SettingsPage() {
           对接自检：Discord 存档与美股期权链路（后端 Phase1 使用 yfinance，后续可替换 OpenBB Platform）。
         </p>
       </header>
+
+      <section className="rounded-[10px] border border-border2 bg-panel2 p-4 space-y-3">
+        <h2 className="text-[13px] font-semibold text-muted uppercase tracking-wide">账户</h2>
+        {user ? (
+          <dl className="grid grid-cols-1 gap-2 text-[12px] max-w-lg">
+            <div>
+              <dt className="text-muted">邮箱</dt>
+              <dd className="font-mono text-text break-all">{user.email}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">角色</dt>
+              <dd className="font-mono text-gold">{user.role}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">注册时间</dt>
+              <dd className="font-mono text-[11px]">
+                {user.created_at ? new Date(user.created_at).toLocaleString() : "—"}
+              </dd>
+            </div>
+            <div className="flex flex-wrap gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => logout()}
+                className="text-[12px] px-3 py-1.5 rounded-md border border-border2 text-text hover:border-red/50 hover:text-red"
+              >
+                退出登录
+              </button>
+              {isAdmin ? (
+                <Link
+                  href="/admin/users"
+                  className="text-[12px] px-3 py-1.5 rounded-md border border-gold text-gold hover:bg-gold/10 inline-flex items-center"
+                >
+                  用户管理 →
+                </Link>
+              ) : null}
+            </div>
+          </dl>
+        ) : (
+          <p className="text-muted text-[12px]">未加载用户信息。</p>
+        )}
+      </section>
 
       <section className="rounded-[10px] border border-border2 bg-panel2 p-4 space-y-3">
         <h2 className="text-[13px] font-semibold text-muted uppercase tracking-wide">

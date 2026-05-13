@@ -2,6 +2,7 @@
 
 import { Brain, Sparkles, User } from "lucide-react";
 import StructuredOutput, { parseStructuredData } from "./StructuredOutput";
+import MarkdownRender from "./MarkdownRender";
 
 export type Message = {
   id: string;
@@ -88,8 +89,8 @@ export default function MessageBubble({ message }: { message: Message }) {
             <span className="text-[12px] font-semibold text-primary">OptionsAji AI</span>
           </div>
           {cleanText && (
-            <div className="text-[14px] text-foreground leading-relaxed whitespace-pre-wrap break-words mb-2">
-              {cleanText}
+            <div className="mb-2 break-words">
+              <MarkdownRender content={cleanText} />
             </div>
           )}
           {data && <StructuredOutput data={data} />}
