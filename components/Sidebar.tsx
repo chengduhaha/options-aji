@@ -6,10 +6,11 @@ import {
   BarChart3, BookOpen, ChevronDown, ChevronRight,
   LayoutDashboard, LineChart, ListFilter, Newspaper,
   RadioTower, ScanLine, Settings, Sparkles, Star, TrendingUp,
-  Wallet, Globe, Layers, Zap, Activity, Briefcase,
+  Wallet, Globe, Layers, Zap, Activity, Briefcase, Shield,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useState } from "react";
+import { useAuth } from "@/lib/auth-context";
 
 const NAV_GROUPS = [
   {
@@ -68,7 +69,9 @@ function NavItem({
       ? pathname === "/"
       : item.id === "stock"
         ? pathname.startsWith("/stock")
-        : pathname === item.href || pathname.startsWith(`${item.href}/`);
+        : item.id === "admin_users"
+          ? pathname.startsWith("/admin")
+          : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
   return (
     <Link
@@ -106,6 +109,7 @@ function NavItem({
 export default function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const { user, isAdmin } = useAuth();
 
   return (
     <aside className="flex flex-col w-64 glass border-r border-glass-border h-screen">
@@ -147,9 +151,20 @@ export default function Sidebar() {
               )}
               {isOpen && (
                 <div className="space-y-1 mt-1">
-                  {group.items.map(item => (
+                  {group.items.map((item) => (
                     <NavItem key={item.id} item={item} pathname={pathname} />
                   ))}
+                  {group.label === "工具" && isAdmin ? (
+                    <NavItem
+                      item={{
+                        id: "admin_users",
+                        label: "用户管理",
+                        href: "/admin/users",
+                        icon: Shield,
+                      }}
+                      pathname={pathname}
+                    />
+                  ) : null}
                 </div>
               )}
             </div>
@@ -159,6 +174,15 @@ export default function Sidebar() {
 
       {/* Footer */}
       <div className="px-4 py-4 border-t border-glass-border">
+        {user ? (
+          <div className="mb-3 px-1">
+            <div className="text-[10px] text-muted uppercase tracking-wide">已登录</div>
+            <div className="text-[11px] font-mono text-foreground truncate" title={user.email}>
+              {user.email}
+            </div>
+            <div className="text-[10px] text-muted">角色 · {user.role}</div>
+          </div>
+        ) : null}
         {/* Pro Badge */}
         <div className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20 mb-3">
           <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
