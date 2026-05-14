@@ -8,15 +8,10 @@ import {
   useMemo,
   useState,
 } from "react";
+import { api } from "@/lib/api";
+import type { AuthRegisterContract, AuthUserContract } from "@/lib/contracts";
 
-export type AuthUser = {
-  id: string;
-  email: string;
-  display_name: string | null;
-  role: string;
-  created_at: string | null;
-  email_verified: boolean;
-};
+export type AuthUser = AuthUserContract;
 
 type AuthContextValue = {
   token: string | null;
@@ -28,7 +23,8 @@ type AuthContextValue = {
   /** bootstrapped && !loading */
   ready: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, displayName?: string) => Promise<void>;
+  register: (email: string, password: string, displayName?: string) => Promise<AuthRegisterContract>;
+  verifyRegistration: (email: string, code: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
   isAdmin: boolean;
@@ -37,21 +33,6 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const JWT_KEY = "optionsaji_jwt";
-
-function parseErrorMessage(payload: unknown): string {
-  if (!payload || typeof payload !== "object") return "请求失败";
-  const detail = (payload as { detail?: unknown }).detail;
-  if (typeof detail === "string") return detail;
-  if (
-    detail &&
-    typeof detail === "object" &&
-    "message" in detail &&
-    typeof (detail as { message: unknown }).message === "string"
-  ) {
-    return (detail as { message: string }).message;
-  }
-  return "请求失败";
-}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setTokenState] = useState<string | null>(null);
@@ -86,16 +67,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setUser(null);
       return;
     }
-    const res = await fetch("/api/auth/me", {
-      headers: { Authorization: `Bearer ${t}` },
-    });
-    if (!res.ok) {
+    try {
+      const data = await api.auth.me(t);
+      setUser(data);
+    } catch {
       persistToken(null);
       setUser(null);
-      return;
     }
-    const data = (await res.json()) as AuthUser;
-    setUser(data);
   }, [token, persistToken]);
 
   useEffect(() => {
@@ -117,14 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string) => {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const raw = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(parseErrorMessage(raw));
-      const data = raw as { access_token: string; user: AuthUser };
+      const data = await api.auth.login({ email, password });
       persistToken(data.access_token);
       setUser(data.user);
       setLoading(false);
@@ -134,18 +105,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const register = useCallback(
     async (email: string, password: string, displayName?: string) => {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-          display_name: displayName?.trim() || null,
-        }),
+      return api.auth.register({
+        email,
+        password,
+        display_name: displayName?.trim() || null,
       });
-      const raw = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(parseErrorMessage(raw));
-      const data = raw as { access_token: string; user: AuthUser };
+    },
+    [],
+  );
+
+  const verifyRegistration = useCallback(
+    async (email: string, code: string) => {
+      const data = await api.auth.verifyRegister({
+        email,
+        code,
+      });
       persistToken(data.access_token);
       setUser(data.user);
       setLoading(false);
@@ -157,10 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const t = token;
     if (t) {
       try {
-        await fetch("/api/auth/logout", {
-          method: "POST",
-          headers: { Authorization: `Bearer ${t}` },
-        });
+        await api.auth.logout(t);
       } catch {
         /* ignore */
       }
@@ -179,11 +150,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ready: bootstrapped && !loading,
       login,
       register,
+      verifyRegistration,
       logout,
       refreshMe,
       isAdmin: user?.role === "admin",
     }),
-    [token, user, bootstrapped, loading, login, register, logout, refreshMe],
+    [
+      token,
+      user,
+      bootstrapped,
+      loading,
+      login,
+      register,
+      verifyRegistration,
+      logout,
+      refreshMe,
+    ],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

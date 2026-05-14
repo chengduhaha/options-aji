@@ -1,12 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
-  BarChart3, BookOpen, ChevronDown, ChevronRight,
-  LayoutDashboard, LineChart, ListFilter, Newspaper,
-  RadioTower, ScanLine, Settings, Sparkles, Star, TrendingUp,
-  Wallet, Globe, Layers, Zap, Activity, Briefcase, Shield,
+  BookOpen,
+  ChevronDown,
+  ChevronRight,
+  LayoutDashboard,
+  LineChart,
+  RadioTower,
+  ScanLine,
+  Settings,
+  Sparkles,
+  Star,
+  User,
+  Zap,
+  Activity,
+  BarChart3,
+  Shield,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useState } from "react";
@@ -17,39 +28,10 @@ const NAV_GROUPS = [
     label: null,
     items: [
       { id: "dash", label: "市场总览", href: "/", icon: LayoutDashboard },
-    ],
-  },
-  {
-    label: "期权分析",
-    items: [
-      { id: "chain", label: "期权链", href: "/options/chain", icon: Layers },
       { id: "scanner", label: "期权扫描器", href: "/scanner", icon: ScanLine },
-      { id: "unusual", label: "异常活动", href: "/options/unusual", icon: TrendingUp, badge: "HOT" },
-      { id: "gex", label: "GEX 分析", href: "/gex", icon: BarChart3 },
-    ],
-  },
-  {
-    label: "股票研究",
-    items: [
       { id: "stock", label: "个股深度", href: "/stock/SPY", icon: LineChart },
-      { id: "earnings", label: "财报日历", href: "/earnings", icon: ListFilter },
-    ],
-  },
-  {
-    label: "市场情报",
-    items: [
-      { id: "macro", label: "宏观经济", href: "/macro", icon: Globe },
-      { id: "indices", label: "指数行情", href: "/indices", icon: TrendingUp },
-      { id: "news", label: "新闻资讯", href: "/news", icon: Newspaper },
-    ],
-  },
-  {
-    label: "工具",
-    items: [
-      { id: "etf", label: "ETF 分析", href: "/etf", icon: Wallet },
-      { id: "feed", label: "实时信号", href: "/feed", icon: RadioTower },
-      { id: "portfolio", label: "投资组合", href: "/portfolio", icon: Briefcase },
-      { id: "ai", label: "AI 助手", href: "/ai", icon: Sparkles, badge: "AI" },
+      { id: "feed", label: "统一信息流", href: "/feed", icon: RadioTower },
+      { id: "ai", label: "AI 分析师", href: "/ai", icon: Sparkles, badge: "AI" },
       { id: "learn", label: "期权学院", href: "/learn", icon: BookOpen },
       { id: "settings", label: "设置", href: "/settings", icon: Settings },
     ],
@@ -69,7 +51,9 @@ function NavItem({
       ? pathname === "/"
       : item.id === "stock"
         ? pathname.startsWith("/stock")
-        : item.id === "admin_users"
+        : item.id === "profile"
+          ? pathname === "/profile" || pathname.startsWith("/profile/")
+          : item.id === "admin_users"
           ? pathname.startsWith("/admin")
           : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
@@ -108,8 +92,21 @@ function NavItem({
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const { user, isAdmin } = useAuth();
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const { user, isAdmin, logout } = useAuth();
+
+  async function handleLogout() {
+    if (logoutBusy) return;
+    setLogoutBusy(true);
+    try {
+      await logout();
+      router.push("/login");
+    } finally {
+      setLogoutBusy(false);
+    }
+  }
 
   return (
     <aside className="flex flex-col w-64 glass border-r border-glass-border h-screen">
@@ -154,7 +151,18 @@ export default function Sidebar() {
                   {group.items.map((item) => (
                     <NavItem key={item.id} item={item} pathname={pathname} />
                   ))}
-                  {group.label === "工具" && isAdmin ? (
+                  {group.label === null && user ? (
+                    <NavItem
+                      item={{
+                        id: "profile",
+                        label: "个人中心",
+                        href: "/profile",
+                        icon: User,
+                      }}
+                      pathname={pathname}
+                    />
+                  ) : null}
+                  {group.label === null && isAdmin ? (
                     <NavItem
                       item={{
                         id: "admin_users",
@@ -181,8 +189,29 @@ export default function Sidebar() {
               {user.email}
             </div>
             <div className="text-[10px] text-muted">角色 · {user.role}</div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={logoutBusy}
+              className="mt-2 text-[11px] text-primary hover:underline disabled:opacity-60"
+            >
+              {logoutBusy ? "退出中…" : "退出登录"}
+            </button>
           </div>
-        ) : null}
+        ) : (
+          <div className="mb-3 px-1 text-[11px] text-muted">
+            <div className="mb-2">未登录</div>
+            <div className="flex gap-2">
+              <Link href="/login" className="text-primary hover:underline">
+                登录
+              </Link>
+              <span>·</span>
+              <Link href="/register" className="text-primary hover:underline">
+                注册
+              </Link>
+            </div>
+          </div>
+        )}
         {/* Pro Badge */}
         <div className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20 mb-3">
           <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">

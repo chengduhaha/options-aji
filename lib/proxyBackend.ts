@@ -1,7 +1,67 @@
 import type { NextRequest } from "next/server";
 
+const DEFAULT_BACKEND_TIMEOUT_MS = 25_000;
+const IP_FORWARD_HEADERS = [
+  "x-forwarded-for",
+  "x-real-ip",
+  "x-vercel-forwarded-for",
+  "cf-connecting-ip",
+] as const;
+
 export function backendBaseUrl(): string {
   return (process.env.OPTIONS_AJI_BACKEND_URL ?? "").trim();
+}
+
+function requireHttpsBackend(baseUrl: string): boolean {
+  const strict = (process.env.OPTIONS_AJI_REQUIRE_HTTPS_BACKEND ?? "").trim() === "1";
+  if (!strict) return true;
+  try {
+    const parsed = new URL(baseUrl);
+    return parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function resolveTimeoutMs(): number {
+  const raw = Number(process.env.OPTIONS_AJI_BACKEND_TIMEOUT_MS ?? "");
+  if (Number.isFinite(raw) && raw >= 1_000) return Math.floor(raw);
+  return DEFAULT_BACKEND_TIMEOUT_MS;
+}
+
+function buildForwardHeaders(req: Request, initHeaders?: HeadersInit): Headers {
+  const hdrs = new Headers(initHeaders ?? {});
+  if (!hdrs.has("Accept")) hdrs.set("Accept", "application/json");
+  const requestId = req.headers.get("x-request-id");
+  if (requestId) hdrs.set("X-Request-Id", requestId);
+  const authorization = req.headers.get("authorization");
+  if (authorization) hdrs.set("Authorization", authorization);
+  const contentType = req.headers.get("content-type");
+  if (contentType && !hdrs.has("Content-Type")) hdrs.set("Content-Type", contentType);
+
+  for (const name of IP_FORWARD_HEADERS) {
+    const value = req.headers.get(name);
+    if (value) hdrs.set(name, value);
+  }
+
+  const apiKey = req.headers.get("x-api-key") ?? process.env.OPTIONS_AJI_API_KEY ?? "";
+  if (apiKey) hdrs.set("X-API-Key", apiKey);
+  return hdrs;
+}
+
+async function fetchWithTimeout(input: string, init: RequestInit): Promise<Response> {
+  const timeoutMs = resolveTimeoutMs();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: controller.signal,
+      cache: "no-store",
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 export function backendNotConfiguredResponse(): Response {
@@ -17,6 +77,19 @@ export function backendNotConfiguredResponse(): Response {
   );
 }
 
+export function backendMisconfiguredResponse(message: string): Response {
+  return Response.json(
+    {
+      success: false,
+      error: {
+        code: "backend_misconfigured",
+        message,
+      },
+    },
+    { status: 503 },
+  );
+}
+
 export async function proxyToBackend(
   req: NextRequest,
   backendPath: string,
@@ -24,20 +97,20 @@ export async function proxyToBackend(
 ): Promise<Response> {
   const base = backendBaseUrl();
   if (!base) return backendNotConfiguredResponse();
+  if (!requireHttpsBackend(base)) {
+    return backendMisconfiguredResponse(
+      "OPTIONS_AJI_REQUIRE_HTTPS_BACKEND=1 时，OPTIONS_AJI_BACKEND_URL 必须是 https:// 地址。",
+    );
+  }
 
   const normalized = backendPath.startsWith("/") ? backendPath : `/${backendPath}`;
   const target = `${base.replace(/\/$/, "")}${normalized}`;
-
-  const hdrs = new Headers(init?.headers ?? {});
-  if (!hdrs.has("Accept")) hdrs.set("Accept", "application/json");
-  const apiKey = (req as NextRequest).headers?.get("x-api-key") ?? process.env.OPTIONS_AJI_API_KEY ?? "";
-  if (apiKey) hdrs.set("X-API-Key", apiKey);
+  const hdrs = buildForwardHeaders(req, init?.headers);
 
   try {
-    const upstream = await fetch(target, {
+    const upstream = await fetchWithTimeout(target, {
       ...init,
       headers: hdrs,
-      cache: "no-store",
     });
     const bodyText = await upstream.text();
     return new Response(bodyText, {
@@ -70,6 +143,13 @@ export function proxyBackend(
   return (req: Request) => {
     const base = backendBaseUrl();
     if (!base) return Promise.resolve(backendNotConfiguredResponse());
+    if (!requireHttpsBackend(base)) {
+      return Promise.resolve(
+        backendMisconfiguredResponse(
+          "OPTIONS_AJI_REQUIRE_HTTPS_BACKEND=1 时，OPTIONS_AJI_BACKEND_URL 必须是 https:// 地址。",
+        ),
+      );
+    }
 
     const normalized = backendPath.startsWith("/") ? backendPath : `/${backendPath}`;
 
@@ -77,20 +157,12 @@ export function proxyBackend(
     const incomingUrl = new URL(req.url);
     const qs = incomingUrl.search; // e.g. "?limit=50&page=1"
     const target = `${base.replace(/\/$/, "")}${normalized}${qs}`;
+    const hdrs = buildForwardHeaders(req, init?.headers);
 
-    const hdrs = new Headers(init?.headers ?? {});
-    if (!hdrs.has("Accept")) hdrs.set("Accept", "application/json");
-    const apiKey =
-      (req as NextRequest).headers?.get("x-api-key") ??
-      process.env.OPTIONS_AJI_API_KEY ??
-      "";
-    if (apiKey) hdrs.set("X-API-Key", apiKey);
-
-    return fetch(target, {
+    return fetchWithTimeout(target, {
       method: req.method,
       ...init,
       headers: hdrs,
-      cache: "no-store",
     })
       .then(async (upstream) => {
         const bodyText = await upstream.text();
@@ -111,4 +183,58 @@ export function proxyBackend(
         );
       });
   };
+}
+
+export async function proxySseToBackend(
+  req: NextRequest,
+  backendPath: string,
+  init?: Omit<RequestInit, "method">,
+): Promise<Response> {
+  const base = backendBaseUrl();
+  if (!base) return backendNotConfiguredResponse();
+  if (!requireHttpsBackend(base)) {
+    return backendMisconfiguredResponse(
+      "OPTIONS_AJI_REQUIRE_HTTPS_BACKEND=1 时，OPTIONS_AJI_BACKEND_URL 必须是 https:// 地址。",
+    );
+  }
+
+  const normalized = backendPath.startsWith("/") ? backendPath : `/${backendPath}`;
+  const target = `${base.replace(/\/$/, "")}${normalized}`;
+  const headers = buildForwardHeaders(req, init?.headers);
+  headers.set("Accept", "text/event-stream");
+
+  const payload = req.method === "GET" || req.method === "HEAD" ? undefined : await req.text();
+
+  try {
+    const upstream = await fetch(target, {
+      ...init,
+      method: req.method,
+      headers,
+      body: payload,
+      cache: "no-store",
+    });
+    if (!upstream.ok || upstream.body === null) {
+      const snippet = await upstream.text();
+      return new Response(snippet || upstream.statusText, {
+        status: upstream.status,
+        headers: {
+          "Content-Type": upstream.headers.get("content-type") ?? "text/plain",
+        },
+      });
+    }
+    return new Response(upstream.body, {
+      status: upstream.status,
+      headers: {
+        "Content-Type": upstream.headers.get("content-type") ?? "text/event-stream",
+        Connection: upstream.headers.get("connection") ?? "keep-alive",
+        "Cache-Control": "no-store, no-transform",
+      },
+    });
+  } catch (error: unknown) {
+    const rendered = error instanceof Error ? `${error.name}: ${error.message}` : "proxy_failed";
+    return Response.json(
+      { success: false, error: { code: "proxy_failed", message: rendered } },
+      { status: 502 },
+    );
+  }
 }

@@ -17,45 +17,8 @@ import {
   Area,
   AreaChart,
 } from "recharts";
-
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
-
-interface PulseRow {
-  symbol: string;
-  yahooSymbol?: string;
-  price: number | null;
-  changePct: number | null;
-  invertColors?: boolean;
-  error?: string;
-}
-
-interface MarketOverview {
-  generatedAt: string;
-  marketSessionLabel: string;
-  pulse: PulseRow[];
-  volatility: {
-    vix: number | null;
-    vixChangePct: number | null;
-    band: string;
-    vixSeries: number[];
-    termStructure: Record<string, unknown>;
-  };
-  liquidity: {
-    putCallRatioVolumeApprox: number | null;
-    methodology?: string;
-    symbolsSampled?: string[];
-  };
-  unusual: Array<{
-    symbol: string;
-    type: string;
-    strike: number;
-    expiration: string;
-    volOiRatio: number;
-    sentiment?: string;
-  }>;
-  earnings: Array<{ symbol: string; date: string; note?: string }>;
-  gexQuick: Array<{ symbol: string; netGex?: number; gammaFlip?: number; regime?: string }>;
-}
+import { api } from "@/lib/api";
+import type { MarketOverviewContract } from "@/lib/contracts";
 
 // AI Signal mock data for demo
 const AI_SIGNALS = [
@@ -65,34 +28,26 @@ const AI_SIGNALS = [
 ];
 
 export default function DashboardHome() {
-  const [data, setData] = useState<MarketOverview | null>(null);
+  const [data, setData] = useState<MarketOverviewContract | null>(null);
   const [aiText, setAiText] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    setErr(null);
-    const res = await fetch("/api/market/overview", {
-      headers: { "X-API-Key": API_KEY },
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      setErr(`概览加载失败 (${res.status})`);
+    try {
+      setErr(null);
+      const json = await api.market.overview();
+      setData(json);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "概览加载失败";
+      setErr(message);
       setData(null);
-      return;
     }
-    const json = (await res.json()) as MarketOverview;
-    setData(json);
   }, []);
 
   const loadAi = useCallback(async () => {
-    const res = await fetch("/api/agent/brief", {
-      headers: { "X-API-Key": API_KEY },
-      cache: "no-store",
-    });
-    if (!res.ok) return;
-    const j = (await res.json()) as { brief?: string };
+    const j = await api.market.brief();
     if (j.brief) setAiText(j.brief);
   }, []);
 

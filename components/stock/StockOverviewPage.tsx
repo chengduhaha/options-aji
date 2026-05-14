@@ -10,68 +10,74 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
-
-interface OverviewPayload {
-  symbol: string;
-  priceSeries: Array<{ date: string; close: number | null }>;
-  keyStats: Record<string, unknown>;
-  optionLiquidity: Record<string, unknown>;
-  expectedMoves: Array<{ bucket: string; pct: number; straddleUsd: number; expiration: string }>;
-  earnings: { nextDate: string | null; daysTo: number | null };
-  bar?: { price?: number; changePct?: number };
-}
-
-interface PriceTargetPayload {
-  summary?: {
-    lastMonthAvgPriceTarget?: number;
-    lastQuarterAvgPriceTarget?: number;
-    lastYearAvgPriceTarget?: number;
-    allTimeAvgPriceTarget?: number;
-    lastMonthCount?: number;
-    allTimeCount?: number;
-  } | null;
-  consensus?: {
-    priceTarget?: number;
-    high?: number;
-    low?: number;
-    median?: number;
-    buyCount?: number;
-    holdCount?: number;
-    sellCount?: number;
-  } | null;
-}
+import { api } from "@/lib/api";
+import type {
+  AnalystPriceTargetContract,
+  SmartVsRetailContract,
+  StockOverviewContract,
+} from "@/lib/contracts";
 
 export default function StockOverviewPage({ symbol }: { symbol: string }) {
-  const [data, setData] = useState<OverviewPayload | null>(null);
+  const [data, setData] = useState<StockOverviewContract | null>(null);
   const [range, setRange] = useState<"1M" | "3M" | "6M" | "1Y">("3M");
-  const [pt, setPt] = useState<PriceTargetPayload | null>(null);
+  const [pt, setPt] = useState<AnalystPriceTargetContract | null>(null);
+  const [smartVsRetail, setSmartVsRetail] = useState<SmartVsRetailContract | null>(null);
+  const [smartLoading, setSmartLoading] = useState(false);
+  const [smartError, setSmartError] = useState<string | null>(null);
+  const [alertMsg, setAlertMsg] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const res = await fetch(`/api/stock/${encodeURIComponent(symbol)}/overview`, {
-        headers: { "X-API-Key": API_KEY },
-        cache: "no-store",
-      });
-      if (!res.ok || cancelled) return;
-      const j = (await res.json()) as OverviewPayload;
+      const j = await api.stock.overview(symbol);
       if (!cancelled) setData(j);
-    })();
+    })().catch(() => {
+      if (!cancelled) setData(null);
+    });
     (async () => {
-      const res = await fetch(`/api/analyst/${encodeURIComponent(symbol)}/price-target`, {
-        headers: { "X-API-Key": API_KEY },
-        cache: "no-store",
-      });
-      if (!res.ok || cancelled) return;
-      const j = (await res.json()) as PriceTargetPayload;
+      const j = await api.analyst.priceTarget(symbol);
       if (!cancelled) setPt(j);
-    })();
+    })().catch(() => {
+      if (!cancelled) setPt(null);
+    });
+    (async () => {
+      setSmartLoading(true);
+      setSmartError(null);
+      const j = await api.social.smartVsRetail(symbol);
+      if (!cancelled) setSmartVsRetail(j);
+    })().catch(() => {
+      if (!cancelled) {
+        setSmartVsRetail(null);
+        setSmartError("聪明钱 vs 散户钱数据加载失败");
+      }
+    }).finally(() => {
+      if (!cancelled) setSmartLoading(false);
+    });
     return () => {
       cancelled = true;
     };
   }, [symbol]);
+
+  const createResonanceAlert = async () => {
+    setAlertMsg(null);
+    const key =
+      (typeof window !== "undefined" && window.localStorage.getItem("optionsaji_api_key")) || "";
+    if (!key || key.trim().length < 8) {
+      setAlertMsg("请先在设置页保存 API 密钥，再创建预警。");
+      return;
+    }
+    try {
+      await api.alerts.create({
+        api_key: key.trim(),
+        alert_type: "resonance",
+        symbol,
+        threshold: smartVsRetail?.confidence ?? 0.5,
+      });
+      setAlertMsg("共振预警创建成功。");
+    } catch {
+      setAlertMsg("预警创建失败，请稍后重试。");
+    }
+  };
 
   const series = (data?.priceSeries ?? []).map((p) => ({ d: p.date, c: p.close }));
   const sliced = (() => {
@@ -190,6 +196,40 @@ export default function StockOverviewPage({ symbol }: { symbol: string }) {
             财报详情 →
           </Link>
         </div>
+      </div>
+
+      <div className="bg-panel border border-border2 rounded-[10px] p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-[12px] font-semibold text-text">聪明钱 vs 散户钱</h3>
+          <button
+            type="button"
+            onClick={createResonanceAlert}
+            className="text-[11px] px-2.5 py-1 rounded-[6px] border border-gold text-gold hover:bg-gold/10"
+          >
+            创建共振预警
+          </button>
+        </div>
+        {smartLoading ? (
+          <p className="text-[12px] text-muted">加载中...</p>
+        ) : smartError ? (
+          <p className="text-[12px] text-red">{smartError}</p>
+        ) : smartVsRetail ? (
+          <div className="space-y-2">
+            <p className="text-[12px] text-muted">
+              机构方向 <span className="font-mono text-text">{smartVsRetail.institutional_direction}</span>，
+              强度 <span className="font-mono text-gold">{smartVsRetail.institutional_strength}/5</span>；
+              散户方向 <span className="font-mono text-text">{smartVsRetail.retail_direction}</span>，
+              情绪 <span className="font-mono text-gold">{smartVsRetail.retail_sentiment_score}/100</span>。
+            </p>
+            <p className="text-[12px] text-text/90">{smartVsRetail.ai_narrative_zh}</p>
+            <div className="text-[11px] text-muted">
+              共振类型 {smartVsRetail.consensus_type} · 置信度 {(smartVsRetail.confidence * 100).toFixed(1)}%
+            </div>
+          </div>
+        ) : (
+          <p className="text-[12px] text-muted">暂无共振数据。</p>
+        )}
+        {alertMsg ? <p className="text-[11px] text-gold mt-2">{alertMsg}</p> : null}
       </div>
 
       {/* Analyst Price Targets */}

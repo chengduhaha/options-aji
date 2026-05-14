@@ -3,50 +3,16 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { clsx } from "clsx";
+import type {
+  OptionsGexProfileContract,
+  StockChainAnalysisContract,
+  StockChainAnalysisStrikeRowContract,
+  StockChainLegAnalysisContract,
+} from "@/lib/contracts";
 
 const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
 
-type ChainLeg = {
-  dayVolume?: number | null;
-  openInterest?: number | null;
-  impliedVolatilityPct?: number | null;
-  delta?: number | null;
-  gamma?: number | null;
-  theta?: number | null;
-  vega?: number | null;
-  bid?: number | null;
-  ask?: number | null;
-  midpoint?: number | null;
-  oiSpike?: boolean;
-  ivSkewOutlier?: boolean;
-  liquidity?: string;
-  spreadRatio?: number | null;
-};
-
-type AnalysisStrikeRow = {
-  strike: number;
-  parity: { flag: boolean };
-  call: ChainLeg | null;
-  put: ChainLeg | null;
-};
-
-type ChainAnalysisResponse = {
-  symbol: string;
-  expiration?: string;
-  source?: string;
-  expirations?: string[];
-  underlyingPrice?: number | null;
-  ivMedian?: number | null;
-  summary?: {
-    totalCallOi?: number;
-    totalPutOi?: number;
-    putCallOiRatio?: number | null;
-  };
-  highlights?: Array<{ type: string; strike: number; side?: string; detail: string }>;
-  strikes?: AnalysisStrikeRow[];
-  riskFreeRate?: number;
-  error?: string;
-};
+const HEATMAP_MAX_STRIKES = 48;
 
 type GreekCaps = {
   absDelta: number;
@@ -55,9 +21,61 @@ type GreekCaps = {
   vega: number;
 };
 
+type OiWallMeta = { callStrike: number | null; putStrike: number | null };
+
+function sampleStrikesAroundSpot(
+  rows: StockChainAnalysisStrikeRowContract[],
+  spot: number,
+  maxRows: number,
+): StockChainAnalysisStrikeRowContract[] {
+  if (rows.length <= maxRows) return rows;
+  if (spot <= 0) return rows.slice(0, maxRows);
+  const sorted = [...rows].sort((a, b) => a.strike - b.strike);
+  let bestIdx = 0;
+  let bestDist = Infinity;
+  sorted.forEach((r, i) => {
+    const d = Math.abs(r.strike - spot);
+    if (d < bestDist) {
+      bestDist = d;
+      bestIdx = i;
+    }
+  });
+  const half = Math.floor(maxRows / 2);
+  const start = Math.max(0, Math.min(bestIdx - half, sorted.length - maxRows));
+  return sorted.slice(start, start + maxRows);
+}
+
+function computeOiWalls(rows: StockChainAnalysisStrikeRowContract[]): OiWallMeta {
+  let callStrike: number | null = null;
+  let putStrike: number | null = null;
+  let bestCallOi = -1;
+  let bestPutOi = -1;
+  for (const r of rows) {
+    const coi = r.call?.openInterest;
+    if (typeof coi === "number" && coi > 0 && coi > bestCallOi) {
+      bestCallOi = coi;
+      callStrike = r.strike;
+    }
+    const poi = r.put?.openInterest;
+    if (typeof poi === "number" && poi > 0 && poi > bestPutOi) {
+      bestPutOi = poi;
+      putStrike = r.strike;
+    }
+  }
+  if (bestCallOi < 0) callStrike = null;
+  if (bestPutOi < 0) putStrike = null;
+  return { callStrike, putStrike };
+}
+
+function nearestAtmDistance(rows: StockChainAnalysisStrikeRowContract[], spot: number): number {
+  if (rows.length === 0 || spot <= 0) return Infinity;
+  return rows.reduce((m, r) => Math.min(m, Math.abs(r.strike - spot)), Infinity);
+}
+
 export default function StockChainPage({ symbol }: { symbol: string }) {
   const [exp, setExp] = useState<string | null>(null);
-  const [data, setData] = useState<ChainAnalysisResponse | null>(null);
+  const [data, setData] = useState<StockChainAnalysisContract | null>(null);
+  const [gex, setGex] = useState<OptionsGexProfileContract | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -68,7 +86,7 @@ export default function StockChainPage({ symbol }: { symbol: string }) {
         cache: "no-store",
       });
       if (!res.ok || cancelled) return;
-      const j = (await res.json()) as ChainAnalysisResponse;
+      const j = (await res.json()) as StockChainAnalysisContract;
       if (cancelled) return;
       setData(j);
       if (!exp && j.expirations?.length) setExp(j.expirations[0]);
@@ -78,9 +96,40 @@ export default function StockChainPage({ symbol }: { symbol: string }) {
     };
   }, [symbol, exp]);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/options/gex/${encodeURIComponent(symbol)}`, {
+          cache: "no-store",
+        });
+        if (!res.ok || cancelled) return;
+        const j = (await res.json()) as OptionsGexProfileContract;
+        if (!cancelled) setGex(j);
+      } catch {
+        /* non-blocking */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [symbol]);
+
   const spot = data?.underlyingPrice ?? 0;
 
-  const strikesSorted = useMemo(() => data?.strikes ?? [], [data]);
+  const strikesSorted = useMemo(
+    () => [...(data?.strikes ?? [])].sort((a, b) => a.strike - b.strike),
+    [data?.strikes],
+  );
+
+  const oiWalls = useMemo(() => computeOiWalls(strikesSorted), [strikesSorted]);
+
+  const atmBandDist = useMemo(() => nearestAtmDistance(strikesSorted, spot), [strikesSorted, spot]);
+
+  const heatStripRows = useMemo(
+    () => sampleStrikesAroundSpot(strikesSorted, spot, HEATMAP_MAX_STRIKES),
+    [strikesSorted, spot],
+  );
 
   const greekCaps = useMemo((): GreekCaps => {
     let absDelta = 1e-9;
@@ -116,7 +165,7 @@ export default function StockChainPage({ symbol }: { symbol: string }) {
     return "";
   };
 
-  const stratHref = (row: AnalysisStrikeRow, ot: "call" | "put"): string => {
+  const stratHref = (row: StockChainAnalysisStrikeRowContract, ot: "call" | "put"): string => {
     const leg = ot === "call" ? row.call : row.put;
     const expiry = exp ?? data?.expiration ?? "";
     const qs = new URLSearchParams();
@@ -156,6 +205,13 @@ export default function StockChainPage({ symbol }: { symbol: string }) {
     );
   }
 
+  const expMismatchGex =
+    gex &&
+    !gex.error &&
+    gex.expiration &&
+    exp &&
+    String(gex.expiration).slice(0, 10) !== String(exp).slice(0, 10);
+
   return (
     <div className="p-5 space-y-4">
       <header className="flex flex-wrap gap-3 items-end">
@@ -188,6 +244,47 @@ export default function StockChainPage({ symbol }: { symbol: string }) {
           {data?.source === "database_snapshots" ? "DB Snapshots (Massive 同步)" : "Yahoo Chain"}
         </div>
       </header>
+
+      <section className="bg-panel border border-border2 rounded-[10px] p-3 space-y-2 text-[11px] text-muted">
+        <div className="text-[12px] font-semibold text-gold">行权分布 · 墙位参考</div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 font-mono">
+          {oiWalls.callStrike != null && (
+            <span>
+              OI Call wall{" "}
+              <span className="text-green">{oiWalls.callStrike.toFixed(0)}</span>（当前到期链）
+            </span>
+          )}
+          {oiWalls.putStrike != null && (
+            <span>
+              OI Put wall{" "}
+              <span className="text-red">{oiWalls.putStrike.toFixed(0)}</span>（当前到期链）
+            </span>
+          )}
+          {gex && !gex.error && typeof gex.callWall === "number" && typeof gex.putWall === "number" && (
+            <span className="text-text/90">
+              GEX Call/Put wall{" "}
+              <span className="text-green">{gex.callWall.toFixed(0)}</span> /{" "}
+              <span className="text-red">{gex.putWall.toFixed(0)}</span>
+              {gex.expiration ? (
+                <span className="text-muted"> · 近月 {String(gex.expiration).slice(0, 10)}</span>
+              ) : null}
+            </span>
+          )}
+          {gex?.error ? <span className="text-muted">GEX 暂不可用（{gex.error}）</span> : null}
+        </div>
+        {expMismatchGex ? (
+          <div className="text-[10px] text-amber-300/90">
+            提示：下方表格到期日与 GEX 近月不一致时，墙位仅作参考，请以当前到期 OI 墙为主。
+          </div>
+        ) : null}
+        <div className="text-[10px] leading-relaxed">
+          ATM 行高亮：最接近现价的行权 + ±2% 价格带；Wall 行左侧金边标示（OI 墙 / GEX 墙）。
+        </div>
+      </section>
+
+      {strikesSorted.length > 0 && (
+        <ChainLiquidityHeatmap rows={heatStripRows} totalStrikes={strikesSorted.length} spot={spot} />
+      )}
 
       {data?.summary ? (
         <div className="flex flex-wrap gap-4 text-[11px] text-muted bg-panel border border-border2 rounded-[8px] px-3 py-2 font-mono">
@@ -245,12 +342,29 @@ export default function StockChainPage({ symbol }: { symbol: string }) {
             {strikesSorted.map((row) => {
               const c = row.call;
               const p = row.put;
-              const atm = spot > 0 && Math.abs(row.strike - spot) < spot * 0.02;
+              const dist = spot > 0 ? Math.abs(row.strike - spot) : Infinity;
+              const atmNear =
+                spot > 0 && (dist <= spot * 0.02 || (atmBandDist < Infinity && dist <= atmBandDist + 1e-6));
               const parityRow = row.parity.flag;
+              const gexCall =
+                gex && !gex.error && typeof gex.callWall === "number"
+                  ? Math.abs(row.strike - gex.callWall) < 0.51
+                  : false;
+              const gexPut =
+                gex && !gex.error && typeof gex.putWall === "number"
+                  ? Math.abs(row.strike - gex.putWall) < 0.51
+                  : false;
+              const oiCallWallRow = oiWalls.callStrike != null && row.strike === oiWalls.callStrike;
+              const oiPutWallRow = oiWalls.putStrike != null && row.strike === oiWalls.putStrike;
+              const wallRow = oiCallWallRow || oiPutWallRow || gexCall || gexPut;
               return (
                 <tr
                   key={row.strike}
-                  className={clsx(atm && "bg-gold-dim/35", parityRow && "ring-1 ring-gold/20")}
+                  className={clsx(
+                    atmNear && "bg-[rgba(212,175,55,0.12)]",
+                    parityRow && "ring-1 ring-gold/25",
+                    wallRow && "border-l-2 border-l-gold",
+                  )}
                 >
                   <td className={clsx("text-right py-1 px-1", legLiquidityTone(c?.liquidity))}>
                     {fmtNum(c?.dayVolume)}
@@ -267,6 +381,24 @@ export default function StockChainPage({ symbol }: { symbol: string }) {
                   <td className="text-center py-1 px-2 align-middle">
                     <div className="font-bold text-[11px] text-text">{row.strike.toFixed(0)}</div>
                     {parityRow ? <span className="text-[9px] text-gold">💰</span> : null}
+                    <div className="flex justify-center gap-1 flex-wrap mt-0.5">
+                      {oiCallWallRow ? (
+                        <span className="text-[8px] px-1 rounded bg-green/15 text-green">OI C</span>
+                      ) : null}
+                      {oiPutWallRow ? (
+                        <span className="text-[8px] px-1 rounded bg-red/15 text-red">OI P</span>
+                      ) : null}
+                      {gexCall ? (
+                        <span className="text-[8px] px-1 rounded border border-gold/40 text-gold">
+                          GEX C
+                        </span>
+                      ) : null}
+                      {gexPut ? (
+                        <span className="text-[8px] px-1 rounded border border-gold/40 text-gold">
+                          GEX P
+                        </span>
+                      ) : null}
+                    </div>
                     <div className="flex justify-center gap-1.5 mt-1">
                       <Link
                         href={stratHref(row, "call")}
@@ -306,7 +438,134 @@ export default function StockChainPage({ symbol }: { symbol: string }) {
   );
 }
 
-function GreekBars({ leg, caps }: { leg: ChainLeg | null | undefined; caps: GreekCaps }) {
+function ChainLiquidityHeatmap({
+  rows,
+  totalStrikes,
+  spot,
+}: {
+  rows: StockChainAnalysisStrikeRowContract[];
+  totalStrikes: number;
+  spot: number;
+}) {
+  const maxCallVol = rows.reduce(
+    (m, r) => Math.max(m, typeof r.call?.dayVolume === "number" ? r.call.dayVolume : 0),
+    0,
+  );
+  const maxPutVol = rows.reduce(
+    (m, r) => Math.max(m, typeof r.put?.dayVolume === "number" ? r.put.dayVolume : 0),
+    0,
+  );
+  const maxCallOi = rows.reduce(
+    (m, r) => Math.max(m, typeof r.call?.openInterest === "number" ? r.call.openInterest : 0),
+    0,
+  );
+  const maxPutOi = rows.reduce(
+    (m, r) => Math.max(m, typeof r.put?.openInterest === "number" ? r.put.openInterest : 0),
+    0,
+  );
+
+  const labels: Array<{ key: string; label: string; tone: "call" | "put"; max: number; getter: (row: StockChainAnalysisStrikeRowContract) => number }> = [
+    {
+      key: "cv",
+      label: "Call Vol",
+      tone: "call",
+      max: maxCallVol,
+      getter: (row) => (typeof row.call?.dayVolume === "number" ? row.call.dayVolume : 0),
+    },
+    {
+      key: "pv",
+      label: "Put Vol",
+      tone: "put",
+      max: maxPutVol,
+      getter: (row) => (typeof row.put?.dayVolume === "number" ? row.put.dayVolume : 0),
+    },
+    {
+      key: "coi",
+      label: "Call OI",
+      tone: "call",
+      max: maxCallOi,
+      getter: (row) => (typeof row.call?.openInterest === "number" ? row.call.openInterest : 0),
+    },
+    {
+      key: "poi",
+      label: "Put OI",
+      tone: "put",
+      max: maxPutOi,
+      getter: (row) => (typeof row.put?.openInterest === "number" ? row.put.openInterest : 0),
+    },
+  ];
+
+  const truncated = totalStrikes > HEATMAP_MAX_STRIKES;
+
+  return (
+    <section className="bg-panel border border-border2 rounded-[10px] p-3 space-y-2 overflow-x-auto">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <div className="text-[12px] font-semibold text-gold">成交 / 持仓热力（相对本带内最大值）</div>
+        <div className="text-[10px] text-muted font-mono">
+          采样 {rows.length} / {totalStrikes} 行权
+          {truncated ? `（ATM ± 窗口，上限 ${HEATMAP_MAX_STRIKES}）` : ""}
+        </div>
+      </div>
+      <div className="min-w-[320px] space-y-1">
+        {labels.map((rowDef) => (
+          <div key={rowDef.key} className="flex items-center gap-2">
+            <span
+              className={clsx(
+                "w-[56px] flex-shrink-0 text-[9px] uppercase text-right font-mono",
+                rowDef.tone === "call" ? "text-green/90" : "text-red/90",
+              )}
+            >
+              {rowDef.label}
+            </span>
+            <div className="flex flex-1 gap-px rounded overflow-hidden border border-border2/80 bg-panel2">
+              {rows.map((r) => {
+                const v = rowDef.getter(r);
+                const frac = rowDef.max > 0 ? Math.min(1, v / rowDef.max) : 0;
+                const alpha = 0.12 + frac * 0.78;
+                const isAtm = spot > 0 && Math.abs(r.strike - spot) <= spot * 0.02;
+                const bg =
+                  rowDef.tone === "call"
+                    ? `rgba(0, 212, 170, ${alpha})`
+                    : `rgba(255, 107, 107, ${alpha})`;
+                return (
+                  <div
+                    key={`${rowDef.key}-${r.strike}`}
+                    className="flex-1 min-w-0 h-[14px] relative group"
+                    style={{ backgroundColor: bg }}
+                    title={`K ${r.strike} · ${rowDef.label} ${v.toLocaleString()}`}
+                  >
+                    {isAtm ? (
+                      <div className="absolute inset-x-0 bottom-0 h-0.5 bg-gold/90 pointer-events-none" />
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-3 text-[9px] text-muted font-mono">
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-3 h-2 bg-green/60 rounded-sm" /> Call
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-3 h-2 bg-red/60 rounded-sm" /> Put
+        </span>
+        <span className="flex items-center gap-1">
+          <span className="inline-block w-6 h-0.5 bg-gold" /> ATM 带 (~±2%)
+        </span>
+      </div>
+    </section>
+  );
+}
+
+function GreekBars({
+  leg,
+  caps,
+}: {
+  leg: StockChainLegAnalysisContract | null | undefined;
+  caps: GreekCaps;
+}) {
   if (!leg) return <span className="text-muted">—</span>;
 
   const d = typeof leg.delta === "number" ? leg.delta : null;
@@ -314,8 +573,7 @@ function GreekBars({ leg, caps }: { leg: ChainLeg | null | undefined; caps: Gree
   const th = typeof leg.theta === "number" ? leg.theta : null;
   const v = typeof leg.vega === "number" ? leg.vega : null;
 
-  const deltaFrac =
-    d === null ? 0 : Math.min(1, Math.abs(d) / (caps.absDelta * 2 || 1e-9));
+  const deltaFrac = d === null ? 0 : Math.min(1, Math.abs(d) / (caps.absDelta * 2 || 1e-9));
   const gammaFrac = g === null ? 0 : Math.min(1, Math.abs(g) / caps.gamma);
   const thetaFrac = th === null ? 0 : Math.min(1, Math.abs(th) / caps.absTheta);
   const vegaFrac = v === null ? 0 : Math.min(1, Math.abs(v) / caps.vega);
@@ -330,13 +588,9 @@ function GreekBars({ leg, caps }: { leg: ChainLeg | null | undefined; caps: Gree
   );
 }
 
-function tooltipGreeks(l: ChainLeg): string {
+function tooltipGreeks(l: StockChainLegAnalysisContract): string {
   const parts: string[] = [];
-  const pick = (
-    lab: string,
-    x: number | null | undefined,
-    d: number,
-  ): void => {
+  const pick = (lab: string, x: number | null | undefined, d: number): void => {
     if (typeof x !== "number" || Number.isNaN(x)) return;
     parts.push(`${lab}:${x.toFixed(d)}`);
   };
@@ -407,7 +661,7 @@ function MonoBar({
   );
 }
 
-function markersForLeg(leg?: ChainLeg | null): string {
+function markersForLeg(leg?: StockChainLegAnalysisContract | null): string {
   if (!leg) return "";
   let s = "";
   if (leg.ivSkewOutlier) s += " ⚡";

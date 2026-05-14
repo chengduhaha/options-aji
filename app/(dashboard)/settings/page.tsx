@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import clsx from "clsx";
 import { useAuth } from "@/lib/auth-context";
+import { api } from "@/lib/api";
 
 type IntegrationPayload = {
   generated_at_utc?: string;
@@ -44,6 +45,15 @@ type BillingStatusPayload = {
   stripe_configured?: boolean;
 };
 
+type AlertItem = {
+  id: number;
+  alert_type: string;
+  symbol: string;
+  threshold?: number | null;
+  enabled: boolean;
+  created_at: string;
+};
+
 export default function SettingsPage() {
   const { user, logout, isAdmin } = useAuth();
   const [data, setData] = useState<IntegrationPayload | null>(null);
@@ -52,6 +62,16 @@ export default function SettingsPage() {
   const [apiKey, setApiKey] = useState("");
   const [billingStatus, setBillingStatus] = useState<BillingStatusPayload | null>(null);
   const [billingMsg, setBillingMsg] = useState<string | null>(null);
+  const [alerts, setAlerts] = useState<AlertItem[]>([]);
+  const [alertType, setAlertType] = useState("resonance");
+  const [alertSymbol, setAlertSymbol] = useState("SPY");
+  const [alertThreshold, setAlertThreshold] = useState("70");
+  const [alertMsg, setAlertMsg] = useState<string | null>(null);
+  const [pushDiscord, setPushDiscord] = useState(true);
+  const [pushTelegram, setPushTelegram] = useState(false);
+  const [pushEmail, setPushEmail] = useState(false);
+  const [pushKeywords, setPushKeywords] = useState("NVDA, TSLA, CPI, FOMC");
+  const [pushMsg, setPushMsg] = useState<string | null>(null);
 
   useEffect(() => {
     try {
@@ -79,6 +99,46 @@ export default function SettingsPage() {
       })
       .catch(() => {
         if (!cancel) setBillingStatus(null);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [apiKey]);
+
+  useEffect(() => {
+    const key = apiKey.trim();
+    if (key.length < 8) return;
+    let cancel = false;
+    api.profile
+      .getPushSettings(key)
+      .then((payload) => {
+        if (cancel) return;
+        setPushDiscord(Boolean(payload.data.push_discord));
+        setPushTelegram(Boolean(payload.data.push_telegram));
+        setPushEmail(Boolean(payload.data.push_email));
+        setPushKeywords(payload.data.keywords || "");
+      })
+      .catch(() => {
+        if (!cancel) setPushMsg("推送设置读取失败，已使用本地默认值。");
+      });
+    return () => {
+      cancel = true;
+    };
+  }, [apiKey]);
+
+  useEffect(() => {
+    if (!apiKey || apiKey.length < 8) {
+      setAlerts([]);
+      return;
+    }
+    let cancel = false;
+    fetch(`/api/alerts?api_key=${encodeURIComponent(apiKey)}`, { cache: "no-store" })
+      .then(async (res) => {
+        const json = (await res.json()) as { data?: AlertItem[] };
+        if (!cancel) setAlerts(json.data ?? []);
+      })
+      .catch(() => {
+        if (!cancel) setAlerts([]);
       });
     return () => {
       cancel = true;
@@ -168,6 +228,55 @@ export default function SettingsPage() {
     if (j.url) window.location.href = j.url;
   }
 
+  async function createAlert() {
+    setAlertMsg(null);
+    const key = apiKey.trim();
+    if (key.length < 8) {
+      setAlertMsg("请先配置 API 密钥。");
+      return;
+    }
+    const threshold = Number(alertThreshold);
+    const res = await fetch("/api/alerts", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        api_key: key,
+        alert_type: alertType,
+        symbol: alertSymbol.trim().toUpperCase(),
+        threshold: Number.isFinite(threshold) ? threshold : null,
+      }),
+    });
+    if (!res.ok) {
+      setAlertMsg("预警创建失败。");
+      return;
+    }
+    setAlertMsg("预警创建成功。");
+    const refresh = await fetch(`/api/alerts?api_key=${encodeURIComponent(key)}`);
+    const payload = (await refresh.json()) as { data?: AlertItem[] };
+    setAlerts(payload.data ?? []);
+  }
+
+  async function savePushSettings() {
+    setPushMsg(null);
+    const key = apiKey.trim();
+    if (key.length < 8) {
+      setPushMsg("请先保存 API 密钥。");
+      return;
+    }
+    try {
+      await api.profile.savePushSettings({
+        api_key: key,
+        push_discord: pushDiscord,
+        push_telegram: pushTelegram,
+        push_email: pushEmail,
+        keywords: pushKeywords,
+      });
+      setPushMsg("推送设置已保存。");
+    } catch {
+      setPushMsg("推送设置保存失败。");
+    }
+  }
+
   return (
     <div className="h-full overflow-y-auto p-6 max-w-3xl mx-auto space-y-6 text-[13px] text-text">
       <header>
@@ -175,6 +284,12 @@ export default function SettingsPage() {
         <p className="text-muted text-[12px] leading-relaxed">
           对接自检：Discord 存档与美股期权链路（后端 Phase1 使用 yfinance，后续可替换 OpenBB Platform）。
         </p>
+        <Link
+          href="/settings/deployment"
+          className="inline-flex mt-2 text-[12px] text-blue hover:underline"
+        >
+          打开部署健康检查 →
+        </Link>
       </header>
 
       <section className="rounded-[10px] border border-border2 bg-panel2 p-4 space-y-3">
@@ -216,6 +331,93 @@ export default function SettingsPage() {
         ) : (
           <p className="text-muted text-[12px]">未加载用户信息。</p>
         )}
+      </section>
+
+      <section className="rounded-[10px] border border-border2 bg-panel2 p-4 space-y-3">
+        <h2 className="text-[13px] font-semibold text-muted uppercase tracking-wide">预警中心</h2>
+        <p className="text-[12px] text-muted">
+          支持共振、异动和情绪阈值预警。当前版本提供基础订阅，后续可扩展 Telegram / Email 推送。
+        </p>
+        <div className="flex flex-wrap gap-2 items-center">
+          <select
+            value={alertType}
+            onChange={(e) => setAlertType(e.target.value)}
+            className="bg-bg border border-border2 rounded-md px-2 py-1.5 text-[12px]"
+          >
+            <option value="resonance">共振信号</option>
+            <option value="unusual_option">异动期权</option>
+            <option value="sentiment_score">情绪阈值</option>
+          </select>
+          <input
+            value={alertSymbol}
+            onChange={(e) => setAlertSymbol(e.target.value.toUpperCase())}
+            className="bg-bg border border-border2 rounded-md px-2 py-1.5 text-[12px] font-mono w-24"
+          />
+          <input
+            value={alertThreshold}
+            onChange={(e) => setAlertThreshold(e.target.value)}
+            className="bg-bg border border-border2 rounded-md px-2 py-1.5 text-[12px] font-mono w-24"
+          />
+          <button
+            type="button"
+            onClick={createAlert}
+            className="text-[12px] px-3 py-1.5 rounded-md border border-gold text-gold"
+          >
+            新建预警
+          </button>
+        </div>
+        {alertMsg ? <p className="text-[11px] text-gold">{alertMsg}</p> : null}
+        <div className="space-y-2">
+          {alerts.map((item) => (
+            <div key={item.id} className="text-[11px] bg-bg/60 border border-border2 rounded-md px-3 py-2">
+              <span className="font-mono text-gold">{item.symbol}</span>
+              <span className="mx-2 text-muted">{item.alert_type}</span>
+              <span className="font-mono text-text">{item.threshold ?? "—"}</span>
+            </div>
+          ))}
+          {alerts.length === 0 ? <p className="text-[11px] text-muted">暂无预警。</p> : null}
+        </div>
+      </section>
+
+      <section className="rounded-[10px] border border-border2 bg-panel2 p-4 space-y-3">
+        <h2 className="text-[13px] font-semibold text-muted uppercase tracking-wide">推送设置</h2>
+        <p className="text-[12px] text-muted">
+          用于配置统一信息流推送渠道与关键词触发规则。当前配置保存在浏览器本地，后续将同步到后端用户配置。
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+          <label className="text-[12px] flex items-center gap-2">
+            <input type="checkbox" checked={pushDiscord} onChange={(e) => setPushDiscord(e.target.checked)} />
+            Discord
+          </label>
+          <label className="text-[12px] flex items-center gap-2">
+            <input type="checkbox" checked={pushTelegram} onChange={(e) => setPushTelegram(e.target.checked)} />
+            Telegram
+          </label>
+          <label className="text-[12px] flex items-center gap-2">
+            <input type="checkbox" checked={pushEmail} onChange={(e) => setPushEmail(e.target.checked)} />
+            Email
+          </label>
+        </div>
+        <div className="space-y-1">
+          <label className="text-[11px] text-muted uppercase tracking-wide">关键词触发</label>
+          <input
+            value={pushKeywords}
+            onChange={(e) => setPushKeywords(e.target.value)}
+            className="w-full bg-bg border border-border2 rounded-md px-2 py-1.5 text-[12px] font-mono"
+            placeholder="逗号分隔关键词"
+          />
+          <p className="text-[10px] text-muted">示例：NVDA, VIX, CPI, FOMC, BREAKOUT</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={savePushSettings}
+            className="text-[12px] px-3 py-1.5 rounded-md border border-gold text-gold"
+          >
+            保存推送设置
+          </button>
+          {pushMsg ? <span className="text-[11px] text-gold">{pushMsg}</span> : null}
+        </div>
       </section>
 
       <section className="rounded-[10px] border border-border2 bg-panel2 p-4 space-y-3">

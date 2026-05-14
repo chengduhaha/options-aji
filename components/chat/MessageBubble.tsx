@@ -30,6 +30,40 @@ export default function MessageBubble({ message }: { message: Message }) {
 
   // Thinking state - show real SSE trace
   if (message.thinking) {
+    const traceRows = message.thinkingLines ?? [];
+    const parsedRows = traceRows.map((row, idx) => {
+      const [label, ...rest] = row.split("｜");
+      const body = rest.join("｜").trim();
+      return { id: `${idx}-${row.slice(0, 24)}`, label: label.trim(), body };
+    });
+    const planningCount = parsedRows.filter((row) => row.label.includes("规划")).length;
+    const subagentStartCount = parsedRows.filter((row) => row.label.includes("子代理启动")).length;
+    const subagentDoneCount = parsedRows.filter((row) => row.label.includes("子代理完成")).length;
+    const errorCount = parsedRows.filter((row) => row.label.includes("错误")).length;
+    const durationByAgentMs: Record<string, number> = {};
+    for (const row of parsedRows) {
+      if (!row.label.includes("子代理完成")) continue;
+      const msMatch = row.body.match(/耗时\s+(\d+(?:\.\d+)?)ms/);
+      const secMatch = row.body.match(/耗时\s+(\d+(?:\.\d+)?)s/);
+      const agentMatch = row.body.match(/^([a-z_]+)\s+/);
+      if (!agentMatch) continue;
+      const agent = agentMatch[1];
+      const elapsedMs = msMatch
+        ? Number(msMatch[1])
+        : secMatch
+          ? Number(secMatch[1]) * 1000
+          : 0;
+      if (!Number.isFinite(elapsedMs) || elapsedMs <= 0) continue;
+      durationByAgentMs[agent] = elapsedMs;
+    }
+    const totalAgentMs = Object.values(durationByAgentMs).reduce((sum, value) => sum + value, 0);
+    const stageDurationRows = Object.entries(durationByAgentMs).sort((a, b) => b[1] - a[1]);
+    const plannedTotal = subagentStartCount > 0 ? subagentStartCount : Math.max(subagentDoneCount, 1);
+    const progressRatio = Math.max(0, Math.min(1, subagentDoneCount / plannedTotal));
+    const successRatePct = Math.max(
+      0,
+      Math.min(100, Math.round((subagentDoneCount / Math.max(subagentStartCount, 1)) * 100)),
+    );
     return (
       <div className="flex gap-3 animate-fade-up">
         <AvatarOA />
@@ -43,20 +77,77 @@ export default function MessageBubble({ message }: { message: Message }) {
           </div>
 
           <div className="glass rounded-xl p-4 border border-primary/20">
-            <div className="max-h-48 overflow-y-auto font-mono text-[11px] leading-relaxed space-y-1.5">
-              {(message.thinkingLines ?? []).length === 0 ? (
+            <div className="mb-3 space-y-2">
+              <div className="flex items-center justify-between text-[10px] text-muted">
+                <span>阶段进度</span>
+                <span className="font-mono">
+                  {subagentDoneCount}/{plannedTotal} 已完成
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-glass-border overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-primary to-accent transition-all duration-300"
+                  style={{ width: `${Math.round(progressRatio * 100)}%` }}
+                />
+              </div>
+              <div className="flex items-center gap-2 text-[10px] text-muted">
+                <span>规划 {planningCount}</span>
+                <span>启动 {subagentStartCount}</span>
+                <span>完成 {subagentDoneCount}</span>
+                <span className={errorCount > 0 ? "text-red" : ""}>错误 {errorCount}</span>
+                <span className={successRatePct < 100 ? "text-gold" : ""}>
+                  成功率 {successRatePct}%
+                </span>
+              </div>
+              {totalAgentMs > 0 && (
+                <div className="text-[10px] text-muted space-y-1">
+                  <div className="font-mono">总耗时 {totalAgentMs >= 1000 ? `${(totalAgentMs / 1000).toFixed(1)}s` : `${Math.round(totalAgentMs)}ms`}</div>
+                  <div className="flex flex-wrap gap-2">
+                    {stageDurationRows.map(([agent, ms]) => (
+                      <span key={agent} className="px-1.5 py-0.5 rounded bg-glass-subtle border border-glass-border font-mono">
+                        {agent}: {ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {errorCount > 0 && (
+                <div className="text-[10px] text-red bg-red/10 border border-red/20 rounded px-2 py-1.5">
+                  检测到执行错误，建议：先切换到快速问答模式重试；若仍失败，缩小问题范围并指定单一标的。
+                </div>
+              )}
+            </div>
+            <div className="max-h-56 overflow-y-auto font-mono text-[11px] leading-relaxed space-y-2">
+              {parsedRows.length === 0 ? (
                 <div className="flex items-center gap-2 text-muted">
                   <div className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
                   <span>等待后端推送事件...</span>
                 </div>
               ) : (
-                message.thinkingLines?.map((row, idx) => (
+                parsedRows.map((row, idx) => (
                   <div
-                    key={`${idx}-${row.slice(0, 48)}`}
-                    className="flex items-start gap-2 text-muted-foreground whitespace-pre-wrap break-words"
+                    key={row.id}
+                    className="rounded-md border border-glass-border bg-glass-subtle px-2.5 py-2 text-muted-foreground whitespace-pre-wrap break-words"
                   >
-                    <span className="text-primary/50 flex-shrink-0">{String(idx + 1).padStart(2, "0")}.</span>
-                    <span>{row}</span>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-primary/50">{String(idx + 1).padStart(2, "0")}.</span>
+                      <span
+                        className={
+                          row.label.includes("子代理完成")
+                            ? "text-green text-[10px] px-1.5 py-0.5 rounded bg-green/10"
+                            : row.label.includes("子代理启动")
+                              ? "text-blue text-[10px] px-1.5 py-0.5 rounded bg-blue/10"
+                              : row.label.includes("规划")
+                                ? "text-gold text-[10px] px-1.5 py-0.5 rounded bg-gold/10"
+                                : row.label.includes("错误")
+                                  ? "text-red text-[10px] px-1.5 py-0.5 rounded bg-red/10"
+                                  : "text-primary text-[10px] px-1.5 py-0.5 rounded bg-primary/10"
+                        }
+                      >
+                        {row.label}
+                      </span>
+                    </div>
+                    <div>{row.body || row.label}</div>
                   </div>
                 ))
               )}

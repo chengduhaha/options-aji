@@ -26,8 +26,17 @@ async function forward(req: NextRequest, segments: string[]): Promise<Response> 
   if (ct) headers.set("Content-Type", ct);
   const auth = req.headers.get("authorization");
   if (auth) headers.set("Authorization", auth);
-  const xf = req.headers.get("x-forwarded-for");
-  if (xf) headers.set("X-Forwarded-For", xf);
+
+  const forwardIpHeaders = [
+    "x-forwarded-for",
+    "x-real-ip",
+    "x-vercel-forwarded-for",
+    "cf-connecting-ip",
+  ] as const;
+  for (const name of forwardIpHeaders) {
+    const v = req.headers.get(name);
+    if (v) headers.set(name, v);
+  }
 
   const apiKey = process.env.OPTIONS_AJI_API_KEY ?? "";
   if (apiKey) headers.set("X-API-Key", apiKey);
