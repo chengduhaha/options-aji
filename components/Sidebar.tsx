@@ -3,9 +3,12 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  AlertTriangle,
   BookOpen,
+  Building2,
   ChevronDown,
   ChevronRight,
+  Eye,
   LayoutDashboard,
   LineChart,
   RadioTower,
@@ -36,14 +39,22 @@ const NAV_GROUPS = [
       { id: "settings", label: "设置", href: "/settings", icon: Settings },
     ],
   },
+  {
+    label: "另类数据",
+    items: [
+      { id: "divergence", label: "散户背离扫描", href: "/scanner/divergence", icon: AlertTriangle, badge: "NEW" },
+      { id: "darkpool", label: "暗池雷达", href: "/dark-pool", icon: Eye },
+      { id: "congress", label: "国会山追踪", href: "/congress", icon: Building2, badge: "HOT" },
+    ],
+  },
 ];
 
-function NavItem({ 
-  item, 
-  pathname 
-}: { 
-  item: typeof NAV_GROUPS[0]["items"][0] & { badge?: string }; 
-  pathname: string 
+function NavItem({
+  item,
+  pathname,
+}: {
+  item: typeof NAV_GROUPS[0]["items"][0] & { badge?: string };
+  pathname: string;
 }) {
   const Icon = item.icon;
   const isActive =
@@ -51,11 +62,13 @@ function NavItem({
       ? pathname === "/"
       : item.id === "stock"
         ? pathname.startsWith("/stock")
-        : item.id === "profile"
-          ? pathname === "/profile" || pathname.startsWith("/profile/")
-          : item.id === "admin_users"
-          ? pathname.startsWith("/admin")
-          : pathname === item.href || pathname.startsWith(`${item.href}/`);
+        : item.id === "scanner"
+          ? pathname === "/scanner"
+          : item.id === "profile"
+            ? pathname === "/profile" || pathname.startsWith("/profile/")
+            : item.id === "admin_users"
+            ? pathname.startsWith("/admin")
+            : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
   return (
     <Link
@@ -69,8 +82,8 @@ function NavItem({
     >
       <div className={clsx(
         "flex items-center justify-center w-8 h-8 rounded-lg transition-all",
-        isActive 
-          ? "bg-primary/20 text-primary" 
+        isActive
+          ? "bg-primary/20 text-primary"
           : "bg-glass text-muted-foreground group-hover:text-foreground group-hover:bg-glass"
       )}>
         <Icon className="w-4 h-4" />
@@ -222,7 +235,7 @@ export default function Sidebar() {
             <div className="text-[10px] text-muted">全功能访问</div>
           </div>
         </div>
-        
+
         {/* Quick Actions */}
         <div className="flex gap-2">
           <Link
