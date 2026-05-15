@@ -215,17 +215,12 @@ export default function Sidebar() {
           <div className="mb-3 px-1 text-[11px] text-muted">
             <div className="mb-2">未登录</div>
             <div className="flex gap-2">
-              <Link href="/login" className="text-primary hover:underline">
-                登录
-              </Link>
+              <Link href="/login" className="text-primary hover:underline">登录</Link>
               <span>·</span>
-              <Link href="/register" className="text-primary hover:underline">
-                注册
-              </Link>
+              <Link href="/register" className="text-primary hover:underline">注册</Link>
             </div>
           </div>
         )}
-        {/* Pro Badge */}
         <div className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20 mb-3">
           <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
             <Star className="w-4 h-4 fill-primary text-primary" />
@@ -235,8 +230,6 @@ export default function Sidebar() {
             <div className="text-[10px] text-muted">全功能访问</div>
           </div>
         </div>
-
-        {/* Quick Actions */}
         <div className="flex gap-2">
           <Link
             href="/landing"
