@@ -35,6 +35,31 @@ export interface MarketOverviewContract {
   gexQuick: Array<{ symbol: string; netGex?: number; gammaFlip?: number; regime?: string }>;
 }
 
+export type SignalCardDirection = "bull" | "bear" | "neut";
+
+export type SignalCardKind = "gex" | "flow" | "news" | "macro" | "strategy";
+
+export type SignalCardPriority = "urgent" | "high" | "medium" | "low";
+
+export interface SignalCardContract {
+  id: string;
+  type: SignalCardKind;
+  priority: SignalCardPriority;
+  tag: string;
+  time_cn: string;
+  title: string;
+  ticker: string;
+  direction: SignalCardDirection;
+  strength: number;
+  summary: string;
+}
+
+export interface SignalsFeedEnvelopeContract {
+  generated_at_utc: string;
+  source: string;
+  signals: SignalCardContract[];
+}
+
 export interface AgentBriefContract {
   brief?: string;
 }

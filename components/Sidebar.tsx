@@ -5,14 +5,19 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   AlertTriangle,
   BookOpen,
+  Bot,
   Building2,
   ChevronDown,
   ChevronRight,
   Eye,
+  Globe2,
   LayoutDashboard,
+  Layers,
   LineChart,
+  Newspaper,
   RadioTower,
   ScanLine,
+  ScanSearch,
   Settings,
   Sparkles,
   Star,
@@ -47,6 +52,16 @@ const NAV_GROUPS = [
       { id: "congress", label: "国会山追踪", href: "/congress", icon: Building2, badge: "HOT" },
     ],
   },
+  {
+    label: "跨市场",
+    items: [
+      { id: "cross_market", label: "跨市场总览", href: "/cross-market", icon: Globe2 },
+      { id: "cross_scanner", label: "套利扫描", href: "/cross-market/scanner", icon: ScanSearch },
+      { id: "cross_feed", label: "跨市场信息流", href: "/cross-market/feed", icon: Newspaper },
+      { id: "ontology_copilot", label: "本体 Copilot", href: "/copilot", icon: Bot, badge: "NEW" },
+      { id: "ontology_inspector", label: "本体调试台", href: "/inspector", icon: Layers },
+    ],
+  },
 ];
 
 function NavItem({
@@ -64,7 +79,17 @@ function NavItem({
         ? pathname.startsWith("/stock")
         : item.id === "scanner"
           ? pathname === "/scanner"
-          : item.id === "profile"
+          : item.id === "cross_market"
+            ? pathname === "/cross-market"
+            : item.id === "cross_scanner"
+              ? pathname.startsWith("/cross-market/scanner")
+              : item.id === "cross_feed"
+                ? pathname.startsWith("/cross-market/feed")
+                : item.id === "ontology_copilot"
+                  ? pathname.startsWith("/copilot")
+                  : item.id === "ontology_inspector"
+                    ? pathname.startsWith("/inspector")
+                    : item.id === "profile"
             ? pathname === "/profile" || pathname.startsWith("/profile/")
             : item.id === "admin_users"
             ? pathname.startsWith("/admin")

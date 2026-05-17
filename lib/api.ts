@@ -18,6 +18,7 @@ import type {
   ScannerRunPayload,
   ScannerTemplateConfigContract,
   ScannerTemplateContract,
+  SignalsFeedEnvelopeContract,
   SmartVsRetailContract,
   SocialRadarContract,
   StockOverviewContract,
@@ -115,6 +116,7 @@ export const api = {
     overview: () => fetchJSON<MarketOverviewContract>("/api/market/overview"),
     aiSummary: () => fetchJSON("/api/market/ai-summary"),
     brief: () => fetchJSON<AgentBriefContract>("/api/agent/brief"),
+    signalsFeed: () => fetchJSON<SignalsFeedEnvelopeContract>("/api/signals/feed"),
   },
 
   options: {

@@ -8,11 +8,18 @@ const IP_FORWARD_HEADERS = [
   "cf-connecting-ip",
 ] as const;
 
+const STRICT_HTTPS_MSG =
+  "OPTIONS_AJI_REQUIRE_HTTPS_BACKEND=1 时，OPTIONS_AJI_BACKEND_URL 必须是 https:// 地址。";
+
 export function backendBaseUrl(): string {
   return (process.env.OPTIONS_AJI_BACKEND_URL ?? "").trim();
 }
 
-function requireHttpsBackend(baseUrl: string): boolean {
+/**
+ * When `OPTIONS_AJI_REQUIRE_HTTPS_BACKEND=1`, the backend base URL must use `https:`.
+ * When strict mode is off, always returns true.
+ */
+export function backendUrlSatisfiesHttpsPolicy(baseUrl: string): boolean {
   const strict = (process.env.OPTIONS_AJI_REQUIRE_HTTPS_BACKEND ?? "").trim() === "1";
   if (!strict) return true;
   try {
@@ -21,6 +28,13 @@ function requireHttpsBackend(baseUrl: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * @deprecated Prefer `backendUrlSatisfiesHttpsPolicy` — same behavior, clearer name.
+ */
+export function requireHttpsBackend(baseUrl: string): boolean {
+  return backendUrlSatisfiesHttpsPolicy(baseUrl);
 }
 
 function resolveTimeoutMs(): number {
@@ -64,6 +78,52 @@ async function fetchWithTimeout(input: string, init: RequestInit): Promise<Respo
   }
 }
 
+type ProxyGuardError = "not_configured" | "https_policy";
+
+function guardBackendProxy(base: string): ProxyGuardError | null {
+  if (!base) return "not_configured";
+  if (!backendUrlSatisfiesHttpsPolicy(base)) return "https_policy";
+  return null;
+}
+
+function guardToResponse(code: ProxyGuardError): Response {
+  if (code === "not_configured") return backendNotConfiguredResponse();
+  return backendMisconfiguredResponse(STRICT_HTTPS_MSG);
+}
+
+function normalizeBackendPath(backendPath: string): string {
+  return backendPath.startsWith("/") ? backendPath : `/${backendPath}`;
+}
+
+async function proxyJsonThroughBackend(
+  target: string,
+  req: Request,
+  init?: RequestInit,
+): Promise<Response> {
+  const hdrs = buildForwardHeaders(req, init?.headers);
+  try {
+    const upstream = await fetchWithTimeout(target, {
+      ...init,
+      headers: hdrs,
+    });
+    const bodyText = await upstream.text();
+    return new Response(bodyText, {
+      status: upstream.status,
+      headers: {
+        "Content-Type": upstream.headers.get("content-type") ?? "application/json",
+        "Cache-Control": "no-store",
+      },
+    });
+  } catch (error: unknown) {
+    const rendered =
+      error instanceof Error ? `${error.name}: ${error.message}` : "proxy_failed";
+    return Response.json(
+      { success: false, error: { code: "proxy_failed", message: rendered } },
+      { status: 502 },
+    );
+  }
+}
+
 export function backendNotConfiguredResponse(): Response {
   return Response.json(
     {
@@ -96,38 +156,12 @@ export async function proxyToBackend(
   init?: RequestInit,
 ): Promise<Response> {
   const base = backendBaseUrl();
-  if (!base) return backendNotConfiguredResponse();
-  if (!requireHttpsBackend(base)) {
-    return backendMisconfiguredResponse(
-      "OPTIONS_AJI_REQUIRE_HTTPS_BACKEND=1 时，OPTIONS_AJI_BACKEND_URL 必须是 https:// 地址。",
-    );
-  }
+  const guard = guardBackendProxy(base);
+  if (guard) return guardToResponse(guard);
 
-  const normalized = backendPath.startsWith("/") ? backendPath : `/${backendPath}`;
+  const normalized = normalizeBackendPath(backendPath);
   const target = `${base.replace(/\/$/, "")}${normalized}`;
-  const hdrs = buildForwardHeaders(req, init?.headers);
-
-  try {
-    const upstream = await fetchWithTimeout(target, {
-      ...init,
-      headers: hdrs,
-    });
-    const bodyText = await upstream.text();
-    return new Response(bodyText, {
-      status: upstream.status,
-      headers: {
-        "Content-Type": upstream.headers.get("content-type") ?? "application/json",
-        "Cache-Control": "no-store",
-      },
-    });
-  } catch (error: unknown) {
-    const rendered =
-      error instanceof Error ? `${error.name}: ${error.message}` : "proxy_failed";
-    return Response.json(
-      { success: false, error: { code: "proxy_failed", message: rendered } },
-      { status: 502 },
-    );
-  }
+  return proxyJsonThroughBackend(target, req, init);
 }
 
 /**
@@ -142,46 +176,13 @@ export function proxyBackend(
 ): (req: Request) => Promise<Response> {
   return (req: Request) => {
     const base = backendBaseUrl();
-    if (!base) return Promise.resolve(backendNotConfiguredResponse());
-    if (!requireHttpsBackend(base)) {
-      return Promise.resolve(
-        backendMisconfiguredResponse(
-          "OPTIONS_AJI_REQUIRE_HTTPS_BACKEND=1 时，OPTIONS_AJI_BACKEND_URL 必须是 https:// 地址。",
-        ),
-      );
-    }
+    const guard = guardBackendProxy(base);
+    if (guard) return Promise.resolve(guardToResponse(guard));
 
-    const normalized = backendPath.startsWith("/") ? backendPath : `/${backendPath}`;
-
-    // Forward query string from incoming request
     const incomingUrl = new URL(req.url);
-    const qs = incomingUrl.search; // e.g. "?limit=50&page=1"
-    const target = `${base.replace(/\/$/, "")}${normalized}${qs}`;
-    const hdrs = buildForwardHeaders(req, init?.headers);
-
-    return fetchWithTimeout(target, {
-      method: req.method,
-      ...init,
-      headers: hdrs,
-    })
-      .then(async (upstream) => {
-        const bodyText = await upstream.text();
-        return new Response(bodyText, {
-          status: upstream.status,
-          headers: {
-            "Content-Type": upstream.headers.get("content-type") ?? "application/json",
-            "Cache-Control": "no-store",
-          },
-        });
-      })
-      .catch((error: unknown) => {
-        const rendered =
-          error instanceof Error ? `${error.name}: ${error.message}` : "proxy_failed";
-        return Response.json(
-          { success: false, error: { code: "proxy_failed", message: rendered } },
-          { status: 502 },
-        );
-      });
+    const normalized = normalizeBackendPath(backendPath);
+    const target = `${base.replace(/\/$/, "")}${normalized}${incomingUrl.search}`;
+    return proxyJsonThroughBackend(target, req, { method: req.method, ...init });
   };
 }
 
@@ -191,14 +192,10 @@ export async function proxySseToBackend(
   init?: Omit<RequestInit, "method">,
 ): Promise<Response> {
   const base = backendBaseUrl();
-  if (!base) return backendNotConfiguredResponse();
-  if (!requireHttpsBackend(base)) {
-    return backendMisconfiguredResponse(
-      "OPTIONS_AJI_REQUIRE_HTTPS_BACKEND=1 时，OPTIONS_AJI_BACKEND_URL 必须是 https:// 地址。",
-    );
-  }
+  const guard = guardBackendProxy(base);
+  if (guard) return guardToResponse(guard);
 
-  const normalized = backendPath.startsWith("/") ? backendPath : `/${backendPath}`;
+  const normalized = normalizeBackendPath(backendPath);
   const target = `${base.replace(/\/$/, "")}${normalized}`;
   const headers = buildForwardHeaders(req, init?.headers);
   headers.set("Accept", "text/event-stream");

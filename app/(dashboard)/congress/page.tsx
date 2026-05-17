@@ -136,7 +136,11 @@ export default function CongressPage() {
       </div>
 
       <div className="flex gap-1 p-1 rounded-xl bg-glass border border-glass-border w-fit">
-        {(["trades","交易记录"],["leaderboard","领袖榜"],["backtest","回测工具"] as [Tab,string][]).map(([id,label]) => (
+        {([
+          ["trades", "交易记录"],
+          ["leaderboard", "领袖榜"],
+          ["backtest", "回测工具"],
+        ] as [Tab, string][]).map(([id, label]) => (
           <button key={id} onClick={() => setTab(id)} className={clsx("px-4 py-2 rounded-lg text-sm font-medium transition-all", tab === id ? "bg-primary/20 text-primary border border-primary/30" : "text-muted-foreground hover:text-foreground")}>{label}</button>
         ))}
       </div>
@@ -145,7 +149,11 @@ export default function CongressPage() {
         <div className="space-y-4">
           <div className="flex flex-wrap gap-3 items-center">
             <div className="flex gap-1 p-1 rounded-lg bg-glass border border-glass-border">
-              {(["all","全部"],["senate","参议院"],["house","众议院"] as [string,string][]).map(([c,label]) => (
+              {([
+                ["all", "全部"],
+                ["senate", "参议院"],
+                ["house", "众议院"],
+              ] as [string, string][]).map(([c, label]) => (
                 <button key={c} onClick={() => setChamber(c)} className={clsx("px-3 py-1.5 rounded text-[12px] font-medium transition-all", chamber === c ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground")}>{label}</button>
               ))}
             </div>
