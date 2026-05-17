@@ -17,116 +17,100 @@ import {
   Area,
   AreaChart,
 } from "recharts";
+import { api } from "@/lib/api";
+import type { MarketOverviewContract, SignalCardContract } from "@/lib/contracts";
 
-const API_KEY = process.env.NEXT_PUBLIC_API_KEY ?? "";
-
-interface PulseRow {
-  symbol: string;
-  yahooSymbol?: string;
-  price: number | null;
-  changePct: number | null;
-  invertColors?: boolean;
-  error?: string;
+function mapSignalDirectionToSide(d: SignalCardContract["direction"]): "CALL" | "PUT" | "NEUT" {
+  if (d === "bull") return "CALL";
+  if (d === "bear") return "PUT";
+  return "NEUT";
 }
-
-interface MarketOverview {
-  generatedAt: string;
-  marketSessionLabel: string;
-  pulse: PulseRow[];
-  volatility: {
-    vix: number | null;
-    vixChangePct: number | null;
-    band: string;
-    vixSeries: number[];
-    termStructure: Record<string, unknown>;
-  };
-  liquidity: {
-    putCallRatioVolumeApprox: number | null;
-    methodology?: string;
-    symbolsSampled?: string[];
-  };
-  unusual: Array<{
-    symbol: string;
-    type: string;
-    strike: number;
-    expiration: string;
-    volOiRatio: number;
-    sentiment?: string;
-  }>;
-  earnings: Array<{ symbol: string; date: string; note?: string }>;
-  gexQuick: Array<{ symbol: string; netGex?: number; gammaFlip?: number; regime?: string }>;
-}
-
-// AI Signal mock data for demo
-const AI_SIGNALS = [
-  { id: 1, symbol: "NVDA", type: "CALL", confidence: 87, signal: "看涨", reason: "GEX支撑 + 机构增持" },
-  { id: 2, symbol: "AAPL", type: "PUT", confidence: 72, signal: "看跌", reason: "IV偏高 + 财报前波动" },
-  { id: 3, symbol: "SPY", type: "CALL", confidence: 65, signal: "中性偏多", reason: "Gamma正转 + 支撑位有效" },
-];
 
 export default function DashboardHome() {
-  const [data, setData] = useState<MarketOverview | null>(null);
+  const [data, setData] = useState<MarketOverviewContract | null>(null);
   const [aiText, setAiText] = useState<string | null>(null);
+  const [aiBriefError, setAiBriefError] = useState<string | null>(null);
+  const [aiBriefLoading, setAiBriefLoading] = useState(true);
+  const [signalFeed, setSignalFeed] = useState<SignalCardContract[]>([]);
+  const [signalsError, setSignalsError] = useState<string | null>(null);
+  const [signalsLoading, setSignalsLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async () => {
-    setErr(null);
-    const res = await fetch("/api/market/overview", {
-      headers: { "X-API-Key": API_KEY },
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      setErr(`概览加载失败 (${res.status})`);
+    try {
+      setErr(null);
+      const json = await api.market.overview();
+      setData(json);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "概览加载失败";
+      setErr(message);
       setData(null);
-      return;
     }
-    const json = (await res.json()) as MarketOverview;
-    setData(json);
+  }, []);
+
+  const loadSignals = useCallback(async () => {
+    setSignalsError(null);
+    setSignalsLoading(true);
+    try {
+      const env = await api.market.signalsFeed();
+      setSignalFeed(Array.isArray(env.signals) ? env.signals.slice(0, 6) : []);
+    } catch (error: unknown) {
+      setSignalFeed([]);
+      setSignalsError(error instanceof Error ? error.message : "信号加载失败");
+    } finally {
+      setSignalsLoading(false);
+    }
   }, []);
 
   const loadAi = useCallback(async () => {
-    const res = await fetch("/api/agent/brief", {
-      headers: { "X-API-Key": API_KEY },
-      cache: "no-store",
-    });
-    if (!res.ok) return;
-    const j = (await res.json()) as { brief?: string };
-    if (j.brief) setAiText(j.brief);
+    setAiBriefError(null);
+    setAiBriefLoading(true);
+    try {
+      const j = await api.market.brief();
+      setAiText(typeof j.brief === "string" && j.brief.trim() ? j.brief : null);
+    } catch (error: unknown) {
+      setAiText(null);
+      setAiBriefError(error instanceof Error ? error.message : "摘要加载失败");
+    } finally {
+      setAiBriefLoading(false);
+    }
   }, []);
+
+  const refreshAll = useCallback(async () => {
+    await Promise.all([load(), loadAi(), loadSignals()]);
+  }, [load, loadAi, loadSignals]);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
-      await load();
+      await refreshAll();
       if (!cancelled) setLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [load]);
+  }, [refreshAll]);
 
   useEffect(() => {
     const t = setInterval(() => {
-      void load();
+      void refreshAll();
     }, 30_000);
     return () => clearInterval(t);
-  }, [load]);
-
-  useEffect(() => {
-    void loadAi();
-  }, [loadAi]);
+  }, [refreshAll]);
 
   const refresh = () => {
     setRefreshing(true);
-    Promise.all([load(), loadAi()]).finally(() => {
+    refreshAll().finally(() => {
       setTimeout(() => setRefreshing(false), 400);
     });
   };
 
   const vixPts = data?.volatility.vixSeries?.map((y, i) => ({ i: String(i + 1), y })) ?? [];
+
+  const showSignalsBlock = signalsLoading || signalsError !== null || signalFeed.length > 0;
 
   return (
     <div className="flex flex-col h-full overflow-y-auto">
@@ -215,7 +199,7 @@ export default function DashboardHome() {
 
         <FusionCard endpoint="market" />
 
-        {/* AI Signals Banner */}
+        {showSignalsBlock ? (
         <section className="glass rounded-xl p-4 border border-primary/20 overflow-hidden relative">
           <div className="absolute top-0 right-0 w-32 h-32 bg-primary/10 rounded-full blur-3xl" />
           <div className="relative flex items-center justify-between mb-4">
@@ -225,7 +209,7 @@ export default function DashboardHome() {
               </div>
               <div>
                 <h3 className="text-[14px] font-semibold text-foreground">AI 实时信号</h3>
-                <p className="text-[11px] text-muted">基于 GEX + 机构流向 + IV 分析</p>
+                <p className="text-[11px] text-muted">后端合成信号（/api/signals/feed）</p>
               </div>
             </div>
             <Link 
@@ -235,39 +219,58 @@ export default function DashboardHome() {
               查看全部 <ChevronRight className="w-3.5 h-3.5" />
             </Link>
           </div>
+          {signalsError && (
+            <div className="relative flex items-center gap-2 text-amber-600 text-[12px] mb-3">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              {signalsError}
+            </div>
+          )}
+          {signalsLoading && signalFeed.length === 0 && !signalsError ? (
+            <div className="relative flex items-center justify-center py-10 text-muted text-[13px] gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              加载信号中…
+            </div>
+          ) : (
           <div className="relative grid grid-cols-1 md:grid-cols-3 gap-3">
-            {AI_SIGNALS.map((sig) => (
-              <div 
+            {signalFeed.map((sig) => {
+              const side = mapSignalDirectionToSide(sig.direction);
+              const confidencePct = Math.min(99, Math.max(1, Math.round(sig.strength * 20)));
+              const reason = [sig.title, sig.summary].filter(Boolean).join(" · ") || sig.tag;
+              return (
+              <Link
                 key={sig.id}
+                href={`/stock/${encodeURIComponent(sig.ticker)}/overview`}
                 className="flex items-center gap-3 p-3 rounded-lg bg-glass border border-glass-border hover:border-primary/30 transition-all cursor-pointer"
               >
                 <div className={clsx(
                   "w-10 h-10 rounded-lg flex items-center justify-center text-[12px] font-bold",
-                  sig.type === "CALL" ? "bg-green/20 text-green" : "bg-red/20 text-red"
+                  side === "CALL" ? "bg-green/20 text-green" : side === "PUT" ? "bg-red/20 text-red" : "bg-muted/20 text-muted"
                 )}>
-                  {sig.type === "CALL" ? "C" : "P"}
+                  {side === "CALL" ? "C" : side === "PUT" ? "P" : "—"}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-mono font-semibold text-foreground">{sig.symbol}</span>
+                    <span className="font-mono font-semibold text-foreground">{sig.ticker}</span>
                     <span className={clsx(
                       "px-1.5 py-0.5 rounded text-[9px] font-bold",
-                      sig.confidence >= 80 ? "bg-green/20 text-green" : 
-                      sig.confidence >= 60 ? "bg-primary/20 text-primary" : "bg-muted/20 text-muted"
+                      confidencePct >= 80 ? "bg-green/20 text-green" : 
+                      confidencePct >= 60 ? "bg-primary/20 text-primary" : "bg-muted/20 text-muted"
                     )}>
-                      {sig.confidence}%
+                      {confidencePct}%
                     </span>
                   </div>
-                  <p className="text-[11px] text-muted truncate">{sig.reason}</p>
+                  <p className="text-[11px] text-muted truncate">{reason}</p>
                 </div>
                 <Signal className={clsx(
                   "w-4 h-4 flex-shrink-0",
-                  sig.type === "CALL" ? "text-green" : "text-red"
+                  side === "CALL" ? "text-green" : side === "PUT" ? "text-red" : "text-muted"
                 )} />
-              </div>
-            ))}
+              </Link>
+            );})}
           </div>
+          )}
         </section>
+        ) : null}
 
         {/* Main Grid */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -554,7 +557,11 @@ export default function DashboardHome() {
             </div>
           </div>
           <p className="text-[13px] text-muted-foreground leading-relaxed whitespace-pre-wrap">
-            {aiText ?? "正在生成智能分析..."}
+            {aiBriefLoading
+              ? "正在生成智能分析..."
+              : aiBriefError
+                ? `暂时无法加载摘要：${aiBriefError}`
+                : aiText ?? "暂无摘要"}
           </p>
         </section>
 

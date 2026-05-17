@@ -1,12 +1,31 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
-  BarChart3, BookOpen, ChevronDown, ChevronRight,
-  LayoutDashboard, LineChart, ListFilter, Newspaper,
-  RadioTower, ScanLine, Settings, Sparkles, Star, TrendingUp,
-  Wallet, Globe, Layers, Zap, Activity, Briefcase, Shield,
+  AlertTriangle,
+  BookOpen,
+  Bot,
+  Building2,
+  ChevronDown,
+  ChevronRight,
+  Eye,
+  Globe2,
+  LayoutDashboard,
+  Layers,
+  LineChart,
+  Newspaper,
+  RadioTower,
+  ScanLine,
+  ScanSearch,
+  Settings,
+  Sparkles,
+  Star,
+  User,
+  Zap,
+  Activity,
+  BarChart3,
+  Shield,
 } from "lucide-react";
 import { clsx } from "clsx";
 import { useState } from "react";
@@ -17,51 +36,40 @@ const NAV_GROUPS = [
     label: null,
     items: [
       { id: "dash", label: "市场总览", href: "/", icon: LayoutDashboard },
-    ],
-  },
-  {
-    label: "期权分析",
-    items: [
-      { id: "chain", label: "期权链", href: "/options/chain", icon: Layers },
       { id: "scanner", label: "期权扫描器", href: "/scanner", icon: ScanLine },
-      { id: "unusual", label: "异常活动", href: "/options/unusual", icon: TrendingUp, badge: "HOT" },
-      { id: "gex", label: "GEX 分析", href: "/gex", icon: BarChart3 },
-    ],
-  },
-  {
-    label: "股票研究",
-    items: [
       { id: "stock", label: "个股深度", href: "/stock/SPY", icon: LineChart },
-      { id: "earnings", label: "财报日历", href: "/earnings", icon: ListFilter },
-    ],
-  },
-  {
-    label: "市场情报",
-    items: [
-      { id: "macro", label: "宏观经济", href: "/macro", icon: Globe },
-      { id: "indices", label: "指数行情", href: "/indices", icon: TrendingUp },
-      { id: "news", label: "新闻资讯", href: "/news", icon: Newspaper },
-    ],
-  },
-  {
-    label: "工具",
-    items: [
-      { id: "etf", label: "ETF 分析", href: "/etf", icon: Wallet },
-      { id: "feed", label: "实时信号", href: "/feed", icon: RadioTower },
-      { id: "portfolio", label: "投资组合", href: "/portfolio", icon: Briefcase },
-      { id: "ai", label: "AI 助手", href: "/ai", icon: Sparkles, badge: "AI" },
+      { id: "feed", label: "统一信息流", href: "/feed", icon: RadioTower },
+      { id: "ai", label: "AI 分析师", href: "/ai", icon: Sparkles, badge: "AI" },
       { id: "learn", label: "期权学院", href: "/learn", icon: BookOpen },
       { id: "settings", label: "设置", href: "/settings", icon: Settings },
     ],
   },
+  {
+    label: "另类数据",
+    items: [
+      { id: "divergence", label: "散户背离扫描", href: "/scanner/divergence", icon: AlertTriangle, badge: "NEW" },
+      { id: "darkpool", label: "暗池雷达", href: "/dark-pool", icon: Eye },
+      { id: "congress", label: "国会山追踪", href: "/congress", icon: Building2, badge: "HOT" },
+    ],
+  },
+  {
+    label: "跨市场",
+    items: [
+      { id: "cross_market", label: "跨市场总览", href: "/cross-market", icon: Globe2 },
+      { id: "cross_scanner", label: "套利扫描", href: "/cross-market/scanner", icon: ScanSearch },
+      { id: "cross_feed", label: "跨市场信息流", href: "/cross-market/feed", icon: Newspaper },
+      { id: "ontology_copilot", label: "本体 Copilot", href: "/copilot", icon: Bot, badge: "NEW" },
+      { id: "ontology_inspector", label: "本体调试台", href: "/inspector", icon: Layers },
+    ],
+  },
 ];
 
-function NavItem({ 
-  item, 
-  pathname 
-}: { 
-  item: typeof NAV_GROUPS[0]["items"][0] & { badge?: string }; 
-  pathname: string 
+function NavItem({
+  item,
+  pathname,
+}: {
+  item: typeof NAV_GROUPS[0]["items"][0] & { badge?: string };
+  pathname: string;
 }) {
   const Icon = item.icon;
   const isActive =
@@ -69,9 +77,23 @@ function NavItem({
       ? pathname === "/"
       : item.id === "stock"
         ? pathname.startsWith("/stock")
-        : item.id === "admin_users"
-          ? pathname.startsWith("/admin")
-          : pathname === item.href || pathname.startsWith(`${item.href}/`);
+        : item.id === "scanner"
+          ? pathname === "/scanner"
+          : item.id === "cross_market"
+            ? pathname === "/cross-market"
+            : item.id === "cross_scanner"
+              ? pathname.startsWith("/cross-market/scanner")
+              : item.id === "cross_feed"
+                ? pathname.startsWith("/cross-market/feed")
+                : item.id === "ontology_copilot"
+                  ? pathname.startsWith("/copilot")
+                  : item.id === "ontology_inspector"
+                    ? pathname.startsWith("/inspector")
+                    : item.id === "profile"
+            ? pathname === "/profile" || pathname.startsWith("/profile/")
+            : item.id === "admin_users"
+            ? pathname.startsWith("/admin")
+            : pathname === item.href || pathname.startsWith(`${item.href}/`);
 
   return (
     <Link
@@ -85,8 +107,8 @@ function NavItem({
     >
       <div className={clsx(
         "flex items-center justify-center w-8 h-8 rounded-lg transition-all",
-        isActive 
-          ? "bg-primary/20 text-primary" 
+        isActive
+          ? "bg-primary/20 text-primary"
           : "bg-glass text-muted-foreground group-hover:text-foreground group-hover:bg-glass"
       )}>
         <Icon className="w-4 h-4" />
@@ -108,8 +130,21 @@ function NavItem({
 
 export default function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const { user, isAdmin } = useAuth();
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const { user, isAdmin, logout } = useAuth();
+
+  async function handleLogout() {
+    if (logoutBusy) return;
+    setLogoutBusy(true);
+    try {
+      await logout();
+      router.push("/login");
+    } finally {
+      setLogoutBusy(false);
+    }
+  }
 
   return (
     <aside className="flex flex-col w-64 glass border-r border-glass-border h-screen">
@@ -154,7 +189,18 @@ export default function Sidebar() {
                   {group.items.map((item) => (
                     <NavItem key={item.id} item={item} pathname={pathname} />
                   ))}
-                  {group.label === "工具" && isAdmin ? (
+                  {group.label === null && user ? (
+                    <NavItem
+                      item={{
+                        id: "profile",
+                        label: "个人中心",
+                        href: "/profile",
+                        icon: User,
+                      }}
+                      pathname={pathname}
+                    />
+                  ) : null}
+                  {group.label === null && isAdmin ? (
                     <NavItem
                       item={{
                         id: "admin_users",
@@ -181,9 +227,25 @@ export default function Sidebar() {
               {user.email}
             </div>
             <div className="text-[10px] text-muted">角色 · {user.role}</div>
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={logoutBusy}
+              className="mt-2 text-[11px] text-primary hover:underline disabled:opacity-60"
+            >
+              {logoutBusy ? "退出中…" : "退出登录"}
+            </button>
           </div>
-        ) : null}
-        {/* Pro Badge */}
+        ) : (
+          <div className="mb-3 px-1 text-[11px] text-muted">
+            <div className="mb-2">未登录</div>
+            <div className="flex gap-2">
+              <Link href="/login" className="text-primary hover:underline">登录</Link>
+              <span>·</span>
+              <Link href="/register" className="text-primary hover:underline">注册</Link>
+            </div>
+          </div>
+        )}
         <div className="flex items-center gap-3 p-3 rounded-xl bg-gradient-to-r from-primary/10 to-accent/10 border border-primary/20 mb-3">
           <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
             <Star className="w-4 h-4 fill-primary text-primary" />
@@ -193,8 +255,6 @@ export default function Sidebar() {
             <div className="text-[10px] text-muted">全功能访问</div>
           </div>
         </div>
-        
-        {/* Quick Actions */}
         <div className="flex gap-2">
           <Link
             href="/landing"

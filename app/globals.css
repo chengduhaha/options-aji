@@ -33,6 +33,9 @@
   --color-accent-foreground: #050a14;
   
   /* Semantic Colors */
+  --color-destructive: #ef4444;
+  --color-destructive-foreground: #fafafa;
+  --color-input: rgba(255, 255, 255, 0.12);
   --color-green: #10b981;
   --color-red: #ef4444;
   --color-blue: #3b82f6;
@@ -117,6 +120,11 @@
 @layer utilities {
   .font-mono {
     font-family: var(--font-mono);
+  }
+
+  .terminal-grid {
+    background-image: linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    background-size: 100% 28px;
   }
 
   /* Glass Card Effect */

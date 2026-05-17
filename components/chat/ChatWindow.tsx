@@ -13,14 +13,25 @@ import { runAgentViaSseStream, type AgentChatMessage } from "@/lib/agentSse";
 type Message = AgentChatMessage;
 
 const QUICK_PROMPTS = [
-  { label: "GEX 分析", icon: BarChart3 },
-  { label: "策略推荐", icon: Target },
-  { label: "持仓评估", icon: TrendingUp },
-  { label: "IV 分析", icon: Zap },
-  { label: "解释概念", icon: Brain },
+  { label: "分析期权环境", icon: BarChart3, build: (symbol: string) => `分析 ${symbol} 当前的期权环境，给出策略建议` },
+  { label: "扫描高 IV", icon: Target, build: () => "找到本周 IV Rank 最高的 10 只股票" },
+  {
+    label: "评估价差策略",
+    icon: TrendingUp,
+    build: (symbol: string) => `评估这个策略的风险：Sell ${symbol} 250P 5/16, Buy 240P 5/16`,
+  },
+  { label: "财报策略", icon: Zap, build: () => "下周有哪些重要财报？哪些适合做 IV Crush 策略？" },
+  { label: "对比指数波动", icon: Brain, build: () => "对比 SPY 和 QQQ 的波动率环境" },
 ];
 
 const TICKERS = ["SPY", "QQQ", "AAPL", "TSLA", "NVDA", "AMZN", "MSFT", "META", "GOOGL"];
+const PRESET_TEMPLATES = [
+  (symbol: string) => `分析 ${symbol} 当前的期权环境，给出策略建议`,
+  () => "找到本周 IV Rank 最高的 10 只股票",
+  () => "评估这个策略的风险：Sell TSLA 250P 5/16, Buy 240P 5/16",
+  () => "下周有哪些重要财报？哪些适合做 IV Crush 策略？",
+  () => "对比 SPY 和 QQQ 的波动率环境",
+];
 
 /** Backend expects `^(fast|analysis|strategy)$`; UI labels stay Chinese. */
 const MODES = ["fast", "analysis", "strategy"] as const;
@@ -210,6 +221,18 @@ export default function ChatWindow() {
 
         {/* Input area */}
         <div className="px-5 pb-5 flex-shrink-0">
+          <div className="flex flex-wrap gap-2 mb-3">
+            {PRESET_TEMPLATES.map((buildPrompt, idx) => (
+              <button
+                key={`preset-${idx}`}
+                onClick={() => sendMessage(buildPrompt(ticker))}
+                disabled={loading}
+                className="text-[10px] px-2.5 py-1 rounded-[6px] border border-gold/30 text-gold hover:bg-gold/10 disabled:opacity-50"
+              >
+                模板 {idx + 1}
+              </button>
+            ))}
+          </div>
           {/* Quick prompts */}
           <div className="flex gap-2 mb-3 flex-wrap">
             {QUICK_PROMPTS.map((p) => {
@@ -217,7 +240,7 @@ export default function ChatWindow() {
               return (
                 <button
                   key={p.label}
-                  onClick={() => setInput(p.label + " ")}
+                  onClick={() => setInput(p.build(ticker))}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-full glass-subtle text-[11px] text-muted-foreground hover:text-primary hover:border-primary/30 transition-all"
                 >
                   <Icon className="w-3 h-3" />

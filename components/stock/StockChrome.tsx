@@ -9,10 +9,8 @@ const HOT = ["SPY", "QQQ", "AAPL", "TSLA", "NVDA", "AMZN", "MSFT", "META"];
 
 const TABS: { segment: string; label: string }[] = [
   { segment: "", label: "概览" },
-  { segment: "analyst", label: "分析" },
   { segment: "chain", label: "期权链" },
   { segment: "volatility", label: "波动率" },
-  { segment: "financials", label: "财务" },
   { segment: "unusual", label: "异动" },
   { segment: "gex", label: "GEX" },
   { segment: "strategy", label: "策略" },
@@ -66,7 +64,9 @@ export default function StockChrome({ symbol }: { symbol: string }) {
         <div className="flex flex-wrap gap-1">
           {TABS.map((t) => {
             const href = t.segment ? `/stock/${symbol}/${t.segment}` : `/stock/${symbol}`;
-            const lit = pathname === href;
+            const lit = t.segment
+              ? pathname === href
+              : pathname === `/stock/${symbol}` || pathname === `/stock/${symbol}/overview`;
             return (
               <Link
                 key={t.segment || "overview"}

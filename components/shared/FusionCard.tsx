@@ -45,19 +45,31 @@ export default function FusionCard({ symbol, endpoint }: { symbol?: string; endp
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let c = false;
-    const url = endpoint === "market"
-      ? "/api/fusion/market"
-      : `/api/fusion/stock/${encodeURIComponent(symbol ?? "SPY")}`;
+    let cancelled = false;
+    const url =
+      endpoint === "market"
+        ? "/api/fusion/market"
+        : `/api/fusion/stock/${encodeURIComponent(symbol ?? "SPY")}`;
 
     (async () => {
-      const res = await fetch(url, { headers: { "X-API-Key": API_KEY }, cache: "no-store" });
-      if (!res.ok || c) return;
-      const j = await res.json();
-      if (!c) setData(j.analysis ?? null);
-      if (!c) setLoading(false);
+      try {
+        const res = await fetch(url, { headers: { "X-API-Key": API_KEY }, cache: "no-store" });
+        if (cancelled) return;
+        if (!res.ok) {
+          setLoading(false);
+          return;
+        }
+        const j = await res.json();
+        if (!cancelled) {
+          setData(j.analysis ?? null);
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) setLoading(false);
+      }
     })();
-    return () => { c = true; };
+
+    return () => { cancelled = true; };
   }, [symbol, endpoint]);
 
   if (loading) {

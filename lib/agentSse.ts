@@ -3,11 +3,25 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from "react";
 
 export type AgentSseEvent =
-  | { type: "thinking"; content: string | null }
+  | { type: "thinking"; content: string | null; ts_unix_ms?: number }
+  | { type: "planning"; content: string | null; ts_unix_ms?: number }
+  | {
+      type: "subagent_start";
+      content: string | null;
+      agent?: string | null;
+      ts_unix_ms?: number;
+    }
+  | {
+      type: "subagent_done";
+      content: string | null;
+      agent?: string | null;
+      ts_unix_ms?: number;
+    }
   | {
       type: "data_fetched";
       content: string | null;
       resolved_ticker?: string | null;
+      ts_unix_ms?: number;
     }
   | { type: "answer"; content: string | null }
   | { type: "done" }
@@ -29,6 +43,12 @@ function eventLabel(kind: AgentSseEvent["type"]): string {
       return "思考";
     case "data_fetched":
       return "数据";
+    case "planning":
+      return "规划";
+    case "subagent_start":
+      return "子代理启动";
+    case "subagent_done":
+      return "子代理完成";
     case "error":
       return "错误";
     default:
@@ -166,11 +186,36 @@ export async function runAgentViaSseStream(params: {
     }
 
     let seenAnswer = false;
+    const subagentStartedAt: Record<string, number> = {};
 
     await consumeSse(resp.body.getReader(), {
       onEvent: (eventItem) => {
-        if (eventItem.type === "thinking" || eventItem.type === "data_fetched") {
-          const blob = `${eventLabel(eventItem.type)}｜${eventItem.content ?? ""}`;
+        if (
+          eventItem.type === "thinking" ||
+          eventItem.type === "data_fetched" ||
+          eventItem.type === "planning" ||
+          eventItem.type === "subagent_start" ||
+          eventItem.type === "subagent_done"
+        ) {
+          const nowMs = eventItem.ts_unix_ms ?? Date.now();
+          if (eventItem.type === "subagent_start" && eventItem.agent) {
+            subagentStartedAt[eventItem.agent] = nowMs;
+          }
+
+          let content = eventItem.content ?? "";
+          if (eventItem.type === "subagent_done" && eventItem.agent) {
+            const started = subagentStartedAt[eventItem.agent];
+            if (started) {
+              const elapsedMs = Math.max(0, nowMs - started);
+              const elapsedLabel =
+                elapsedMs >= 1000
+                  ? `${(elapsedMs / 1000).toFixed(1)}s`
+                  : `${Math.round(elapsedMs)}ms`;
+              content = `${content}（耗时 ${elapsedLabel}）`;
+            }
+          }
+
+          const blob = `${eventLabel(eventItem.type)}｜${content}`;
           params.setMessages((membership) =>
             membership.map((messageEntry) =>
               messageEntry.id === params.thinkingMsgId
