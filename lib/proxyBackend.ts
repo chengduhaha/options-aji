@@ -1,6 +1,6 @@
 import type { NextRequest } from "next/server";
 
-const DEFAULT_BACKEND_TIMEOUT_MS = 25_000;
+const DEFAULT_BACKEND_TIMEOUT_MS = 120_000;
 const IP_FORWARD_HEADERS = [
   "x-forwarded-for",
   "x-real-ip",
