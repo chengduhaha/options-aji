@@ -49,7 +49,7 @@ export default function DarkPoolPage() {
       ]);
       if (!tideRes.ok || !flowRes.ok) throw new Error("加载失败");
       const [tideData, flowData] = await Promise.all([tideRes.json(), flowRes.json()]);
-      setTide(tideData);
+      setTide(tideData.today ?? null);
       setFlow(flowData.items ?? flowData ?? []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "加载失败");
