@@ -20,6 +20,9 @@ Thumbs.db
 .idea/
 .cursor/
 
+# TypeScript
+*.tsbuildinfo
+
 # Logs
 *.log
 npm-debug.log*
