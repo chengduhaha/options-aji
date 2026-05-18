@@ -41,6 +41,8 @@ const NAV_GROUPS = [
       { id: "feed", label: "统一信息流", href: "/feed", icon: RadioTower },
       { id: "ai", label: "AI 分析师", href: "/ai", icon: Sparkles, badge: "AI" },
       { id: "learn", label: "期权学院", href: "/learn", icon: BookOpen },
+      { id: "macro", label: "宏观经济", href: "/macro", icon: Activity },
+      { id: "indices", label: "指数行情", href: "/indices", icon: BarChart3 },
       { id: "settings", label: "设置", href: "/settings", icon: Settings },
     ],
   },
