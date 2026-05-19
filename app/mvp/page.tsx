@@ -38,6 +38,7 @@ import { useAuth } from "@/lib/auth-context";
 import type {
   AnalystPriceTargetContract,
   FeedEnvelopeContract,
+  FeedItemContract,
   MarketOverviewContract,
   SignalCardContract,
   SignalsFeedEnvelopeContract,
@@ -167,6 +168,60 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error || "加载失败");
 }
 
+/** Beijing calendar day as YYYY-MM-DD for macro calendar window. */
+function beijingDateString(offsetDays = 0): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Shanghai" });
+}
+
+const MACRO_EVENT_ZH: Array<[string, string]> = [
+  ["nonfarm", "非农就业"],
+  ["payrolls", "非农就业"],
+  ["cpi", "CPI 通胀"],
+  ["ppi", "PPI 生产者物价"],
+  ["fomc", "FOMC 利率决议"],
+  ["fed", "美联储"],
+  ["gdp", "GDP"],
+  ["pmi", "PMI"],
+  ["retail sales", "零售销售"],
+  ["jobless", "初请失业金"],
+  ["unemployment", "失业率"],
+  ["consumer confidence", "消费者信心"],
+  ["ism", "ISM 制造业"],
+  ["housing", "房地产数据"],
+  ["trade balance", "贸易帐"],
+  ["jolts", "JOLTS 职位空缺"],
+];
+
+function macroEventTitleZh(eventName: string): string {
+  const lower = eventName.toLowerCase();
+  for (const [key, zh] of MACRO_EVENT_ZH) {
+    if (lower.includes(key)) return zh;
+  }
+  if (/[\u4e00-\u9fff]/.test(eventName)) return eventName;
+  return `宏观：${eventName}`;
+}
+
+function friendlyApiError(error: string | null, slot: string): string | null {
+  if (!error) return null;
+  const lower = error.toLowerCase();
+  if (lower.includes("internal server error") || lower.includes("500")) {
+    if (slot === "overview") return "个股行情源暂不可用，请稍后刷新";
+    if (slot === "chain") return "期权链快照暂不可用";
+    return "服务暂时不可用，请稍后重试";
+  }
+  if (lower.includes("not found") || lower.includes("404")) {
+    if (slot === "news") return "新闻数据暂不可用";
+    if (slot === "priceTarget") return "分析师目标价暂不可用";
+    return "部分数据接口未启用";
+  }
+  if (lower.includes("chain_meta_failed") || lower.includes("openrouter")) {
+    return "数据源暂不可用";
+  }
+  return error.length > 80 ? `${error.slice(0, 80)}…` : error;
+}
+
 async function settle<T>(fn: () => Promise<T>): Promise<AsyncSlot<T>> {
   try {
     return { data: await fn(), error: null };
@@ -232,26 +287,32 @@ function classifyMarket(overview: MarketOverviewContract | null, signals: Signal
   };
 }
 
+function feedItemImpact(item: FeedItemContract): EventItem["impact"] {
+  const s = (item.sentiment ?? "").toLowerCase();
+  if (s.includes("bull")) return "利好";
+  if (s.includes("bear")) return "利空";
+  if (item.kind === "macro") return "风险";
+  return "中性";
+}
+
 function buildWarRoomEvents(data: WarRoomData): EventItem[] {
   const events: EventItem[] = [];
-  const macroEvents = getEvents(data.macro.data)
-    .filter((ev) => ["High", "Medium"].includes(text(ev.impact)))
-    .slice(0, 4);
+  const now = Date.now();
 
-  for (const ev of macroEvents) {
-    const impact = text(ev.impact) === "High" ? "风险" : "中性";
+  const feedItems = [...(data.feed.data?.items ?? [])].sort(
+    (a, b) => new Date(b.created_at_utc).getTime() - new Date(a.created_at_utc).getTime(),
+  );
+  for (const item of feedItems.slice(0, 5)) {
+    const body =
+      item.bullets_zh?.filter(Boolean).join(" ") ||
+      item.risk_note_zh ||
+      item.body.slice(0, 200);
     events.push({
-      title: text(ev.event, "宏观事件"),
-      body: [
-        text(ev.country),
-        ev.estimate != null ? `预期 ${String(ev.estimate)}` : "",
-        ev.previous != null ? `前值 ${String(ev.previous)}` : "",
-      ]
-        .filter(Boolean)
-        .join(" · "),
-      tag: text(ev.impact, "Macro"),
-      impact,
-      time: zhTime(ev.date),
+      title: item.title,
+      body,
+      tag: item.kind === "macro" ? "宏观情报" : item.kind === "signal" ? "信号" : item.kind,
+      impact: feedItemImpact(item),
+      time: zhTime(item.created_at_utc),
     });
   }
 
@@ -265,7 +326,33 @@ function buildWarRoomEvents(data: WarRoomData): EventItem[] {
     });
   }
 
-  for (const article of getArticles(data.news.data).slice(0, 5)) {
+  const macroEvents = getEvents(data.macro.data)
+    .filter((ev) => ["High", "Medium"].includes(text(ev.impact)))
+    .map((ev) => ({ ev, ts: new Date(text(ev.date)).getTime() }))
+    .filter((row) => !Number.isNaN(row.ts))
+    .sort((a, b) => Math.abs(a.ts - now) - Math.abs(b.ts - now))
+    .slice(0, 3);
+
+  for (const { ev } of macroEvents) {
+    const impact = text(ev.impact) === "High" ? "风险" : "中性";
+    const eventName = text(ev.event, "宏观事件");
+    events.push({
+      title: macroEventTitleZh(eventName),
+      body: [
+        text(ev.country) === "US" ? "美国" : text(ev.country),
+        ev.estimate != null ? `预期 ${String(ev.estimate)}` : "",
+        ev.previous != null ? `前值 ${String(ev.previous)}` : "",
+        eventName !== macroEventTitleZh(eventName) ? `原文：${eventName}` : "",
+      ]
+        .filter(Boolean)
+        .join(" · "),
+      tag: text(ev.impact) === "High" ? "高影响" : "中影响",
+      impact,
+      time: zhTime(ev.date),
+    });
+  }
+
+  for (const article of getArticles(data.news.data).slice(0, 3)) {
     events.push({
       title: text(article.title_zh) || text(article.title, "市场新闻"),
       body: text(article.summary_zh) || text(article.content).slice(0, 160),
@@ -275,7 +362,15 @@ function buildWarRoomEvents(data: WarRoomData): EventItem[] {
     });
   }
 
-  return events.slice(0, 8);
+  const seen = new Set<string>();
+  return events
+    .filter((ev) => {
+      const key = `${ev.title}|${ev.time ?? ""}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 8);
 }
 
 function normalizeOptionCandidates(payload: JsonRecord | null, direction: Direction): OptionCandidate[] {
@@ -422,8 +517,12 @@ function buildChecklist(direction: Direction, report: StockReport | null): strin
   ];
 }
 
-function reportErrors(slots: Array<AsyncSlot<unknown>>): string[] {
-  return slots.map((slot) => slot.error).filter((e): e is string => Boolean(e));
+function reportErrors(
+  slots: Array<{ slot: AsyncSlot<unknown>; key: string }>,
+): string[] {
+  return slots
+    .map(({ slot, key }) => friendlyApiError(slot.error, key))
+    .filter((e): e is string => Boolean(e));
 }
 
 function Card({
@@ -500,13 +599,15 @@ export default function MvpPage() {
 
   const loadWarRoom = useCallback(async () => {
     setWarLoading(true);
+    const today = beijingDateString(0);
+    const tomorrow = beijingDateString(1);
     const [overview, brief, macro, treasury, news, feed, signals] = await Promise.all([
       settle<MarketOverviewContract>(() => api.market.overview()),
       settle<{ brief?: string }>(() => api.market.brief() as Promise<{ brief?: string }>),
-      settle<JsonRecord>(() => api.macro.calendar() as Promise<JsonRecord>),
+      settle<JsonRecord>(() => api.macro.calendar(today, tomorrow, "US") as Promise<JsonRecord>),
       settle<JsonRecord>(() => api.macro.treasury(30) as Promise<JsonRecord>),
       settle<JsonRecord>(() => api.news.latest() as Promise<JsonRecord>),
-      settle<FeedEnvelopeContract>(() => api.feed.unified(30)),
+      settle<FeedEnvelopeContract>(() => api.feed.unified(40)),
       settle<SignalsFeedEnvelopeContract>(() => api.market.signalsFeed()),
     ]);
     setWarRoom({ overview, brief, macro, treasury, news, feed, signals });
@@ -527,17 +628,15 @@ export default function MvpPage() {
       settle<AnalystPriceTargetContract>(() => api.analyst.priceTarget(sym)),
       settle<SmartVsRetailContract>(() => api.social.smartVsRetail(sym)),
       settle<JsonRecord>(() => api.news.stock(sym) as Promise<JsonRecord>),
-      settle<JsonRecord>(() => api.stock.chain(sym) as Promise<JsonRecord>),
+      settle<JsonRecord>(() => api.options.chain(sym) as Promise<JsonRecord>),
       settle<JsonRecord>(() =>
-        deepMode
-          ? fetchJson(`/api/stock/${encodeURIComponent(sym)}/unusual-v2`)
-          : (api.stock.unusual(sym) as Promise<JsonRecord>)
+        fetchJson(`/api/stock/${encodeURIComponent(sym)}/unusual-v2?page_size=20`),
       ),
       settle<JsonRecord>(() => api.stock.strategyIdeas(sym) as Promise<JsonRecord>),
     ]);
     setReport({ overview, priceTarget, smart, news, chain, unusual, strategy });
     setReportLoading(false);
-  }, [deepMode, symbol]);
+  }, [symbol]);
 
   useEffect(() => {
     void runStockReport("SPY");
@@ -564,11 +663,11 @@ export default function MvpPage() {
     value,
   }));
   const allWarErrors = reportErrors([
-    warRoom.overview,
-    warRoom.brief,
-    warRoom.macro,
-    warRoom.news,
-    warRoom.signals,
+    { slot: warRoom.overview, key: "overview" },
+    { slot: warRoom.brief, key: "brief" },
+    { slot: warRoom.macro, key: "macro" },
+    { slot: warRoom.news, key: "news" },
+    { slot: warRoom.signals, key: "signals" },
   ]);
 
   const stockBias = pickActionBias(direction, report);
@@ -581,13 +680,13 @@ export default function MvpPage() {
   const stockNews = getArticles(report?.news.data ?? null).slice(0, 4);
   const reportErrorList = report
     ? reportErrors([
-        report.overview,
-        report.priceTarget,
-        report.smart,
-        report.news,
-        report.chain,
-        report.unusual,
-        report.strategy,
+        { slot: report.overview, key: "overview" },
+        { slot: report.priceTarget, key: "priceTarget" },
+        { slot: report.smart, key: "smart" },
+        { slot: report.news, key: "news" },
+        { slot: report.chain, key: "chain" },
+        { slot: report.unusual, key: "unusual" },
+        { slot: report.strategy, key: "strategy" },
       ])
     : [];
 
