@@ -55,6 +55,7 @@ type AsyncSlot<T> = {
 };
 
 type WarRoomData = {
+  mvp: AsyncSlot<JsonRecord>;
   overview: AsyncSlot<MarketOverviewContract>;
   brief: AsyncSlot<{ brief?: string }>;
   macro: AsyncSlot<JsonRecord>;
@@ -97,8 +98,10 @@ type OptionCandidate = {
 };
 
 const QUICK_SYMBOLS = ["SPY", "QQQ", "NVDA", "TSLA", "AAPL", "AMD"];
+const ACTIVE_EVENT_KINDS = new Set(["discord", "macro", "news"]);
 
 const EMPTY_WAR_ROOM: WarRoomData = {
+  mvp: { data: null, error: null },
   overview: { data: null, error: null },
   brief: { data: null, error: null },
   macro: { data: null, error: null },
@@ -298,10 +301,23 @@ function feedItemImpact(item: FeedItemContract): EventItem["impact"] {
 function buildWarRoomEvents(data: WarRoomData): EventItem[] {
   const events: EventItem[] = [];
   const now = Date.now();
+  const mvpEvents = asArray(data.mvp.data?.events).map(asRecord);
 
-  const feedItems = [...(data.feed.data?.items ?? [])].sort(
-    (a, b) => new Date(b.created_at_utc).getTime() - new Date(a.created_at_utc).getTime(),
-  );
+  for (const item of mvpEvents.slice(0, 8)) {
+    events.push({
+      title: text(item.title, "盘前事件"),
+      body: text(item.watch_zh) || text(item.body) || text(item.summary_zh),
+      tag: text(item.tag, "AI筛选"),
+      impact: ["利好", "利空", "中性", "风险"].includes(text(item.impact))
+        ? (text(item.impact) as EventItem["impact"])
+        : "中性",
+      time: zhTime(item.time ?? item.created_at_utc ?? item.event_time),
+    });
+  }
+
+  const feedItems = [...(data.feed.data?.items ?? [])]
+    .filter((item) => ACTIVE_EVENT_KINDS.has(item.kind))
+    .sort((a, b) => new Date(b.created_at_utc).getTime() - new Date(a.created_at_utc).getTime());
   for (const item of feedItems.slice(0, 5)) {
     const body =
       item.bullets_zh?.filter(Boolean).join(" ") ||
@@ -310,19 +326,9 @@ function buildWarRoomEvents(data: WarRoomData): EventItem[] {
     events.push({
       title: item.title,
       body,
-      tag: item.kind === "macro" ? "宏观情报" : item.kind === "signal" ? "信号" : item.kind,
+      tag: item.kind === "discord" ? "Discord" : item.kind === "macro" ? "宏观情报" : "新闻",
       impact: feedItemImpact(item),
       time: zhTime(item.created_at_utc),
-    });
-  }
-
-  for (const sig of (data.signals.data?.signals ?? []).slice(0, 4)) {
-    events.push({
-      title: sig.title,
-      body: sig.summary,
-      tag: `${sig.ticker} · ${sig.priority}`,
-      impact: sig.direction === "bull" ? "利好" : sig.direction === "bear" ? "利空" : "中性",
-      time: sig.time_cn,
     });
   }
 
@@ -385,20 +391,31 @@ function normalizeOptionCandidates(payload: JsonRecord | null, direction: Direct
   return rows
     .map(asRecord)
     .map((row): OptionCandidate | null => {
-      const sideRaw = text(row.contract_type) || text(row.type) || desiredSide;
+      const details = asRecord(row.details);
+      const day = asRecord(row.day);
+      const greeks = asRecord(row.greeks);
+      const lastQuote = asRecord(row.last_quote ?? row.lastQuote ?? row.quote);
+      const sideRaw = text(row.contract_type) || text(row.type) || text(details.contract_type) || desiredSide;
       const side = sideRaw.toLowerCase().startsWith("p") ? "put" : "call";
       if (side !== desiredSide) return null;
-      const expiration = text(row.expiration_date) || text(row.expiration) || text(payload.expiration);
-      const strike = num(row.strike_price ?? row.strike);
+      const expiration =
+        text(row.expiration_date) ||
+        text(row.expiration) ||
+        text(details.expiration_date) ||
+        text(payload.expiration);
+      const strike = num(row.strike_price ?? row.strike ?? details.strike_price);
       if (!expiration || strike === null) return null;
       const expiryDate = new Date(expiration);
       const dte = Number.isNaN(expiryDate.getTime())
         ? null
         : Math.ceil((expiryDate.getTime() - today.getTime()) / 86_400_000);
-      const bid = num(row.bid);
-      const ask = num(row.ask);
-      const mid = num(row.midpoint) ?? (bid !== null && ask !== null ? (bid + ask) / 2 : null);
-      const ivRaw = num(row.implied_volatility ?? row.impliedVolatility);
+      const bid = num(row.bid ?? lastQuote.bid);
+      const ask = num(row.ask ?? lastQuote.ask);
+      const last = num(row.last_price ?? row.lastPrice ?? day.close);
+      const mid = num(row.midpoint) ?? (bid !== null && ask !== null ? (bid + ask) / 2 : last);
+      const ivRaw = num(row.implied_volatility ?? row.impliedVolatility ?? row.implied_volatility_pct);
+      const volume = num(row.day_volume ?? row.volume ?? day.volume);
+      const openInterest = num(row.open_interest ?? row.openInterest);
       return {
         side,
         strike,
@@ -408,13 +425,13 @@ function normalizeOptionCandidates(payload: JsonRecord | null, direction: Direct
         ask,
         mid,
         ivPct: ivRaw !== null && ivRaw <= 3 ? ivRaw * 100 : ivRaw,
-        delta: num(row.delta),
-        volume: num(row.day_volume ?? row.volume),
-        openInterest: num(row.open_interest ?? row.openInterest),
+        delta: num(row.delta ?? greeks.delta),
+        volume,
+        openInterest,
       };
     })
     .filter((row): row is OptionCandidate => row !== null)
-    .filter((row) => row.dte === null || (row.dte >= 7 && row.dte <= 75))
+    .filter((row) => row.dte === null || (row.dte >= 0 && row.dte <= 60))
     .sort((a, b) => {
       const ad = a.dte ?? 999;
       const bd = b.dte ?? 999;
@@ -422,6 +439,140 @@ function normalizeOptionCandidates(payload: JsonRecord | null, direction: Direct
       return (b.volume ?? 0) - (a.volume ?? 0);
     })
     .slice(0, 8);
+}
+
+function normalizeOptionActivity(payload: JsonRecord | null): JsonRecord[] {
+  if (!payload) return [];
+  const contracts = asArray(payload.contracts);
+  const calls = asArray(payload.calls);
+  const puts = asArray(payload.puts);
+  const rows = contracts.length > 0 ? contracts : [...calls, ...puts];
+  const today = new Date();
+
+  return rows
+    .map(asRecord)
+    .map((row): JsonRecord | null => {
+      const details = asRecord(row.details);
+      const day = asRecord(row.day);
+      const greeks = asRecord(row.greeks);
+      const lastQuote = asRecord(row.last_quote ?? row.lastQuote ?? row.quote);
+      const typeRaw = text(row.contract_type) || text(row.type) || text(details.contract_type);
+      const type = typeRaw.toLowerCase().startsWith("p") ? "put" : "call";
+      const expiration = text(row.expiration_date) || text(row.expiration) || text(details.expiration_date);
+      const strike = num(row.strike_price ?? row.strike ?? details.strike_price);
+      if (!expiration || strike === null) return null;
+      const expiryDate = new Date(expiration);
+      const dte = Number.isNaN(expiryDate.getTime())
+        ? null
+        : Math.ceil((expiryDate.getTime() - today.getTime()) / 86_400_000);
+      if (dte !== null && (dte < 0 || dte > 60)) return null;
+      const volume = num(row.day_volume ?? row.volume ?? day.volume) ?? 0;
+      const openInterest = num(row.open_interest ?? row.openInterest) ?? 0;
+      if (volume <= 0 && openInterest <= 0) return null;
+      const bid = num(row.bid ?? lastQuote.bid);
+      const ask = num(row.ask ?? lastQuote.ask);
+      const last = num(row.last_price ?? row.lastPrice ?? day.close);
+      const mid = num(row.midpoint) ?? (bid !== null && ask !== null ? (bid + ask) / 2 : last);
+      const estimatedFlowUsd = mid !== null ? mid * volume * 100 : null;
+      return {
+        type,
+        strike,
+        expiration_date: expiration,
+        dte,
+        volume,
+        open_interest: openInterest,
+        implied_volatility: num(row.implied_volatility ?? row.impliedVolatility),
+        delta: num(row.delta ?? greeks.delta),
+        estimatedFlowUsd,
+        volOiRatio: openInterest > 0 ? volume / openInterest : null,
+        source: "hot_chain",
+      };
+    })
+    .filter((row): row is JsonRecord => row !== null)
+    .sort((a, b) => {
+      const av = num(a.volume) ?? 0;
+      const bv = num(b.volume) ?? 0;
+      if (av !== bv) return bv - av;
+      return (num(b.open_interest) ?? 0) - (num(a.open_interest) ?? 0);
+    })
+    .slice(0, 8);
+}
+
+function buildTreasuryRead(latest: JsonRecord) {
+  const oneMonth = num(latest.month1 ?? latest["1M"]);
+  const twoYear = num(latest.year2 ?? latest["2Y"]);
+  const tenYear = num(latest.year10 ?? latest["10Y"]);
+  const thirtyYear = num(latest.year30 ?? latest["30Y"]);
+  const spread10y2y = tenYear !== null && twoYear !== null ? tenYear - twoYear : null;
+  const spread30y10y = thirtyYear !== null && tenYear !== null ? thirtyYear - tenYear : null;
+  const spread10y1m = tenYear !== null && oneMonth !== null ? tenYear - oneMonth : null;
+
+  if (spread10y2y === null) {
+    return {
+      label: "等待利率数据",
+      summary: "国债曲线缺少关键期限，暂时只把柱状图作为利率水平参考。",
+      spreads: { spread10y2y, spread30y10y, spread10y1m },
+    };
+  }
+
+  if (spread10y2y < -0.25) {
+    return {
+      label: "曲线深度倒挂",
+      summary: "2Y 高于 10Y，市场仍在交易降息和增长放缓预期；成长股反弹更依赖利率回落和风险偏好修复。",
+      spreads: { spread10y2y, spread30y10y, spread10y1m },
+    };
+  }
+  if (spread10y2y < 0) {
+    return {
+      label: "曲线轻度倒挂",
+      summary: "短端仍高于长端，但倒挂不深；盘中重点看 10Y 是否继续上行，长端上行会压制 QQQ/NVDA 这类久期资产。",
+      spreads: { spread10y2y, spread30y10y, spread10y1m },
+    };
+  }
+  if (spread30y10y !== null && spread30y10y > 0.25) {
+    return {
+      label: "长端偏陡",
+      summary: "30Y 相对 10Y 偏高，长端期限溢价抬升；如果同时伴随美元走强，成长股追高需要降低仓位。",
+      spreads: { spread10y2y, spread30y10y, spread10y1m },
+    };
+  }
+  return {
+    label: "曲线相对正常",
+    summary: "2Y/10Y 未明显倒挂，利率曲线对风险资产的压制相对有限，盘中更应关注指数和波动率确认。",
+    spreads: { spread10y2y, spread30y10y, spread10y1m },
+  };
+}
+
+function buildTradePlan(args: {
+  brief?: string;
+  marketLabel: string;
+  events: EventItem[];
+  treasurySummary: string;
+  vix: number | null;
+  vixChange: number | null;
+}): string[] {
+  const plan: string[] = [];
+  if (args.brief?.trim()) {
+    plan.push(args.brief.trim());
+  }
+  const topEvent = args.events.find((event) => event.tag === "Discord") ?? args.events[0];
+  if (topEvent) {
+    plan.push(`盘前主线先围绕「${topEvent.title}」做情景推演，相关标的只等开盘后量价确认。`);
+  }
+  if (args.marketLabel === "风险优先") {
+    plan.push("市场状态偏防守，开盘前先定义失效条件；第一笔仓位控制在计划仓位的 1/3 以内。");
+  } else if (args.marketLabel === "顺势进攻") {
+    plan.push("风险偏好偏积极，优先找强势板块龙头的回踩确认，不在第一根大阳线追价。");
+  } else {
+    plan.push("市场方向未形成共识，开盘后等待 15-30 分钟，确认 SPY/QQQ 是否同向放量。");
+  }
+  if ((args.vixChange ?? 0) > 3 || (args.vix ?? 0) >= 20) {
+    plan.push("VIX 抬升时减少裸买期权，优先用价差或更小仓位控制权利金损耗。");
+  } else {
+    plan.push("波动率未明显失控时，正股看关键区间，期权看 DTE、成交量、OI 和买卖价差。");
+  }
+  plan.push(args.treasurySummary);
+  return plan.slice(0, 5);
 }
 
 function pickActionBias(direction: Direction, report: StockReport | null) {
@@ -601,16 +752,17 @@ export default function MvpPage() {
     setWarLoading(true);
     const today = beijingDateString(0);
     const tomorrow = beijingDateString(1);
-    const [overview, brief, macro, treasury, news, feed, signals] = await Promise.all([
+    const [mvp, overview, brief, macro, treasury, news, feed, signals] = await Promise.all([
+      settle<JsonRecord>(() => fetchJson("/api/mvp/war-room?hours=6")),
       settle<MarketOverviewContract>(() => api.market.overview()),
       settle<{ brief?: string }>(() => api.market.brief() as Promise<{ brief?: string }>),
       settle<JsonRecord>(() => api.macro.calendar(today, tomorrow, "US") as Promise<JsonRecord>),
       settle<JsonRecord>(() => api.macro.treasury(30) as Promise<JsonRecord>),
       settle<JsonRecord>(() => api.news.latest() as Promise<JsonRecord>),
-      settle<FeedEnvelopeContract>(() => api.feed.unified(40)),
+      settle<FeedEnvelopeContract>(() => api.feed.unified(80, undefined, { kind: "discord" })),
       settle<SignalsFeedEnvelopeContract>(() => api.market.signalsFeed()),
     ]);
-    setWarRoom({ overview, brief, macro, treasury, news, feed, signals });
+    setWarRoom({ mvp, overview, brief, macro, treasury, news, feed, signals });
     setWarLoading(false);
   }, []);
 
@@ -627,10 +779,12 @@ export default function MvpPage() {
       settle<StockOverviewContract>(() => api.stock.overview(sym)),
       settle<AnalystPriceTargetContract>(() => api.analyst.priceTarget(sym)),
       settle<SmartVsRetailContract>(() => api.social.smartVsRetail(sym)),
-      settle<JsonRecord>(() => api.news.stock(sym) as Promise<JsonRecord>),
+      settle<JsonRecord>(() =>
+        fetchJson(`/api/news/stock?tickers=${encodeURIComponent(sym)}&max_age_hours=24`) as Promise<JsonRecord>,
+      ),
       settle<JsonRecord>(() => api.options.chain(sym) as Promise<JsonRecord>),
       settle<JsonRecord>(() =>
-        fetchJson(`/api/stock/${encodeURIComponent(sym)}/unusual-v2?page_size=20`),
+        fetchJson(`/api/stock/${encodeURIComponent(sym)}/unusual-v2?page_size=20&min_score=20`),
       ),
       settle<JsonRecord>(() => api.stock.strategyIdeas(sym) as Promise<JsonRecord>),
     ]);
@@ -656,6 +810,17 @@ export default function MvpPage() {
     { term: "10Y", rate: num(latestTreasury.year10 ?? latestTreasury["10Y"]) },
     { term: "30Y", rate: num(latestTreasury.year30 ?? latestTreasury["30Y"]) },
   ].filter((row): row is { term: string; rate: number } => row.rate !== null);
+  const mvpTreasuryRead = asRecord(warRoom.mvp.data?.treasury_read);
+  const treasuryRead = text(mvpTreasuryRead.summary_zh)
+    ? {
+        label: text(mvpTreasuryRead.label, "AI解读"),
+        summary: text(mvpTreasuryRead.summary_zh),
+        spreads: asRecord(mvpTreasuryRead.spreads),
+      }
+    : buildTreasuryRead(latestTreasury);
+  const treasurySpreads = asRecord(treasuryRead.spreads);
+  const spread10y2y = num(treasurySpreads.spread10y2y ?? treasurySpreads["10y_2y"]);
+  const spread30y10y = num(treasurySpreads.spread30y10y ?? treasurySpreads["30y_10y"]);
   const overview = warRoom.overview.data;
   const pulseRows = overview?.pulse ?? [];
   const vixSeries = (overview?.volatility.vixSeries ?? []).map((value, index) => ({
@@ -690,12 +855,28 @@ export default function MvpPage() {
       ])
     : [];
 
-  const unusualItems = asArray(report?.unusual.data?.items).map(asRecord).slice(0, 5);
+  const strictUnusualItems = asArray(report?.unusual.data?.items).map(asRecord).slice(0, 5);
+  const hotOptionItems = normalizeOptionActivity(report?.chain.data ?? null).slice(0, 5);
+  const unusualItems = strictUnusualItems.length > 0 ? strictUnusualItems : hotOptionItems;
   const strategyIdeas = asArray(report?.strategy.data?.ideas).map(asRecord).slice(0, 3);
   const priceTarget = report?.priceTarget.data;
   const ptAvg = priceTarget?.summary?.lastMonthAvgPriceTarget ?? priceTarget?.consensus?.priceTarget ?? null;
   const spot = num(stockOverview?.bar?.price);
   const upside = spot !== null && ptAvg ? ((ptAvg - spot) / spot) * 100 : null;
+  const mvpTradePlan = asArray(warRoom.mvp.data?.trade_plan)
+    .map((item) => String(item).trim())
+    .filter(Boolean)
+    .slice(0, 6);
+  const tradePlan = mvpTradePlan.length > 0
+    ? mvpTradePlan
+    : buildTradePlan({
+        brief: warRoom.brief.data?.brief,
+        marketLabel: marketState.label,
+        events,
+        treasurySummary: treasuryRead.summary,
+        vix: overview?.volatility.vix ?? null,
+        vixChange: overview?.volatility.vixChangePct ?? null,
+      });
 
   return (
     <main className="min-h-screen bg-background text-foreground">
@@ -831,12 +1012,7 @@ export default function MvpPage() {
               今日交易计划
             </div>
             <div className="mt-4 space-y-3">
-              {[
-                "开盘前只保留 3 个观察标的：指数方向、强势板块龙头、事件驱动个股。",
-                "开盘后先等 15-30 分钟确认量价，不在第一根大波动里追单。",
-                "正股看价格是否接近支撑/压力；期权看 IV、DTE、成交量和 OI。",
-                "如果 VIX 快速上行或宏观数据超预期，降低仓位并缩短持仓时间。",
-              ].map((item) => (
+              {tradePlan.map((item) => (
                 <div key={item} className="flex items-start gap-2 text-sm leading-6 text-muted-foreground">
                   <CheckCircle2 className="mt-1 h-4 w-4 shrink-0 text-green" />
                   <span>{item}</span>
@@ -844,7 +1020,10 @@ export default function MvpPage() {
               ))}
             </div>
             <div className="mt-5 rounded-lg border border-border2 bg-white/[0.02] p-3">
-              <div className="mb-2 text-xs text-muted">国债曲线</div>
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
+                <span>国债曲线</span>
+                <span className="text-gold">{treasuryRead.label}</span>
+              </div>
               {yieldBars.length > 0 ? (
                 <ResponsiveContainer width="100%" height={120}>
                   <BarChart data={yieldBars}>
@@ -858,6 +1037,15 @@ export default function MvpPage() {
               ) : (
                 <div className="flex h-[120px] items-center justify-center text-xs text-muted">收益率暂不可用</div>
               )}
+              <p className="mt-2 text-xs leading-5 text-muted-foreground">{treasuryRead.summary}</p>
+              {spread10y2y !== null ? (
+                <div className="mt-2 text-[10px] text-muted">
+                  10Y-2Y {spread10y2y.toFixed(2)}%
+                  {spread30y10y !== null
+                    ? ` · 30Y-10Y ${spread30y10y.toFixed(2)}%`
+                    : ""}
+                </div>
+              ) : null}
             </div>
           </Card>
         </section>
@@ -1097,7 +1285,7 @@ export default function MvpPage() {
                           </span>
                         </div>
                         <div className="mt-1 text-[10px] text-muted">
-                          Flow {compactMoney(item.estimatedFlowUsd)} · Vol {String(item.volume ?? item.day_volume ?? "—")}
+                          {item.source === "hot_chain" ? "热门成交" : "异动评分"} · Flow {compactMoney(item.estimatedFlowUsd)} · Vol {String(item.volume ?? item.day_volume ?? "—")}
                         </div>
                       </div>
                     );
