@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 
 export default function RegisterPage() {
-  const { ready, user, register, verifyRegistration } = useAuth();
+  const { ready, user, register, verifyRegistration, resendVerification } = useAuth();
   const router = useRouter();
 
   const [phase, setPhase] = useState<"register" | "verify">("register");
@@ -18,6 +18,7 @@ export default function RegisterPage() {
   const [verificationExpiresAt, setVerificationExpiresAt] = useState<string | null>(null);
   const [debugCode, setDebugCode] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -27,6 +28,7 @@ export default function RegisterPage() {
   async function onRegisterSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setInfo(null);
     setBusy(true);
     try {
       const resp = await register(email.trim(), password, displayName.trim() || undefined);
@@ -34,8 +36,26 @@ export default function RegisterPage() {
       setVerificationExpiresAt(resp.verification_expires_at);
       setDebugCode(resp.verification_code);
       setPhase("verify");
+      setInfo("验证码已发送到您的邮箱，请查收（含垃圾箱）。");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "注册失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onResendCode() {
+    if (!pendingEmail.trim()) return;
+    setError(null);
+    setInfo(null);
+    setBusy(true);
+    try {
+      const resp = await resendVerification(pendingEmail);
+      setVerificationExpiresAt(resp.verification_expires_at);
+      setDebugCode(resp.verification_code);
+      setInfo("新的验证码已发送，请查收邮箱。");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "发送失败");
     } finally {
       setBusy(false);
     }
@@ -128,6 +148,7 @@ export default function RegisterPage() {
             {debugCode ? (
               <p className="text-[11px] text-primary">开发环境验证码：{debugCode}</p>
             ) : null}
+            {info ? <p className="text-[12px] text-primary">{info}</p> : null}
             {error ? <p className="text-[12px] text-red">{error}</p> : null}
             <button
               type="submit"
@@ -135,6 +156,14 @@ export default function RegisterPage() {
               className="w-full py-2.5 rounded-md bg-primary text-primary-foreground text-[13px] font-semibold disabled:opacity-50"
             >
               {busy ? "验证中…" : "验证并登录"}
+            </button>
+            <button
+              type="button"
+              disabled={busy || !ready}
+              onClick={() => void onResendCode()}
+              className="w-full py-2.5 rounded-md border border-border2 text-[13px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              {busy ? "发送中…" : "没收到验证码？重新发送"}
             </button>
             <button
               type="button"

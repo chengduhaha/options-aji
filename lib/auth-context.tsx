@@ -9,7 +9,11 @@ import {
   useState,
 } from "react";
 import { api } from "@/lib/api";
-import type { AuthRegisterContract, AuthUserContract } from "@/lib/contracts";
+import type {
+  AuthRegisterContract,
+  AuthResendVerificationContract,
+  AuthUserContract,
+} from "@/lib/contracts";
 
 export type AuthUser = AuthUserContract;
 
@@ -25,6 +29,7 @@ type AuthContextValue = {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, displayName?: string) => Promise<AuthRegisterContract>;
   verifyRegistration: (email: string, code: string) => Promise<void>;
+  resendVerification: (email: string) => Promise<AuthResendVerificationContract>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
   isAdmin: boolean;
@@ -127,6 +132,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [persistToken],
   );
 
+  const resendVerification = useCallback(async (email: string) => {
+    return api.auth.resendVerification(email.trim());
+  }, []);
+
   const logout = useCallback(async () => {
     const t = token;
     if (t) {
@@ -151,6 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       register,
       verifyRegistration,
+      resendVerification,
       logout,
       refreshMe,
       isAdmin: user?.role === "admin",
@@ -163,6 +173,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       login,
       register,
       verifyRegistration,
+      resendVerification,
       logout,
       refreshMe,
     ],

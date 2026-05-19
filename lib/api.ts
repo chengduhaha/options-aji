@@ -8,6 +8,7 @@ import type {
   AlertCreateEnvelopeContract,
   AlertsListEnvelopeContract,
   AuthRegisterContract,
+  AuthResendVerificationContract,
   AuthTokenContract,
   FeedEnvelopeContract,
   KolDirectoryContract,
@@ -89,6 +90,11 @@ export const api = {
       fetchJSON<AuthTokenContract>("/api/auth/register/verify", {
         method: "POST",
         body: JSON.stringify(payload),
+      }),
+    resendVerification: (email: string) =>
+      fetchJSON<AuthResendVerificationContract>("/api/auth/register/resend", {
+        method: "POST",
+        body: JSON.stringify({ email }),
       }),
     login: (payload: { email: string; password: string }) =>
       fetchJSON<AuthTokenContract>("/api/auth/login", {

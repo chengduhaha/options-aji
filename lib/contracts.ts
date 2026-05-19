@@ -271,6 +271,12 @@ export interface AuthRegisterContract {
   verification_code: string | null;
 }
 
+export interface AuthResendVerificationContract {
+  verification_required: boolean;
+  verification_expires_at: string;
+  verification_code: string | null;
+}
+
 /** LocalStorage key for integration API key (alerts, watchlist, push settings). */
 export const OPTIONS_AJI_API_KEY_LS = "optionsaji_api_key";
 
