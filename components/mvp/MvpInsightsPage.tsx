@@ -44,6 +44,15 @@ import {
   expectedMoveBucketLabel,
 } from "@/lib/option-framework";
 import {
+  formatWarRoomImpactLabel,
+  mergeRelatedAssets,
+  normalizeWarRoomImpact,
+  normalizeWarRoomImpactScope,
+  warRoomImpactScopeLabel,
+  type WarRoomImpact,
+  type WarRoomImpactScope,
+} from "@/lib/war-room-impact";
+import {
   type MvpMarketRegimeCode,
   classifyRegimeFromMetrics,
   normalizeRegimeCode,
@@ -102,6 +111,10 @@ type EventDetail = {
   riskNote?: string;
   rawOriginal?: string;
   tickers: string[];
+  relatedAssets: string[];
+  watchZh?: string;
+  impactNote?: string;
+  impactScopeLabel: string;
 };
 
 type EventItem = {
@@ -109,13 +122,19 @@ type EventItem = {
   title: string;
   body: string;
   tag: string;
-  impact: "利好" | "利空" | "中性" | "风险";
+  impact: WarRoomImpact;
+  impactScope: WarRoomImpactScope;
+  impactLabel: string;
+  impactNote?: string;
+  relatedAssets: string[];
+  watchZh?: string;
   time: string;
   detail: EventDetail;
 };
 
 function eventDetailFromFeed(item: FeedItemContract): EventDetail {
   const bullets = (item.bullets_zh ?? []).filter((b) => typeof b === "string" && b.trim());
+  const tickers = item.tickers ?? [];
   return {
     source: "",
     timeLabel: zhTime(item.created_at_utc),
@@ -124,7 +143,9 @@ function eventDetailFromFeed(item: FeedItemContract): EventDetail {
     bullets,
     riskNote: item.risk_note_zh?.trim() || undefined,
     rawOriginal: item.raw_body?.trim() || undefined,
-    tickers: item.tickers ?? [],
+    tickers,
+    relatedAssets: tickers,
+    impactScopeLabel: "美股大盘",
   };
 }
 
@@ -138,10 +159,12 @@ function eventPreviewBody(detail: EventDetail, maxLen = 160): string {
 function EventDetailModal({
   detail,
   impact,
+  impactLabel,
   onClose,
 }: {
   detail: EventDetail;
-  impact: EventItem["impact"];
+  impact: WarRoomImpact;
+  impactLabel: string;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -176,8 +199,9 @@ function EventDetailModal({
 
         <div className="flex flex-wrap items-center gap-2 pr-8">
           <Pill tone={impact === "利好" ? "green" : impact === "利空" || impact === "风险" ? "red" : "muted"}>
-            {impact}
+            {impactLabel}
           </Pill>
+          <span className="text-[10px] text-muted-foreground">评判对象：{detail.impactScopeLabel}</span>
           <span className="ml-auto font-mono text-xs text-gold">{detail.timeLabel}</span>
         </div>
 
@@ -185,14 +209,25 @@ function EventDetailModal({
           {detail.title}
         </h2>
 
-        {detail.tickers.length > 0 ? (
+        {detail.relatedAssets.length > 0 ? (
           <div className="mt-2 flex flex-wrap gap-1">
-            {detail.tickers.map((t) => (
+            {detail.relatedAssets.map((t) => (
               <Pill key={t} tone="blue">
                 {t}
               </Pill>
             ))}
           </div>
+        ) : null}
+
+        {detail.impactNote ? (
+          <p className="mt-2 text-xs leading-5 text-gold/90">{detail.impactNote}</p>
+        ) : null}
+
+        {detail.watchZh ? (
+          <section className="mt-3 rounded-lg border border-border2 bg-white/[0.02] px-3 py-2">
+            <h3 className="text-[11px] uppercase tracking-wider text-muted">观察要点</h3>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">{detail.watchZh}</p>
+          </section>
         ) : null}
 
         {detail.summary ? (
@@ -497,7 +532,7 @@ function marketStateFromInsights(
   };
 }
 
-function feedItemImpact(item: FeedItemContract): EventItem["impact"] {
+function feedItemImpact(item: FeedItemContract): WarRoomImpact {
   const s = (item.sentiment ?? "").toLowerCase();
   if (s.includes("bull")) return "利好";
   if (s.includes("bear")) return "利空";
@@ -505,7 +540,96 @@ function feedItemImpact(item: FeedItemContract): EventItem["impact"] {
   return "中性";
 }
 
+function makeWarRoomEventItem(params: {
+  id: string;
+  title: string;
+  body: string;
+  tag: string;
+  timeLabel: string;
+  impact: WarRoomImpact;
+  impactScope: WarRoomImpactScope;
+  relatedAssets: string[];
+  impactNote?: string;
+  watchZh?: string;
+  detailExtras?: Partial<EventDetail>;
+}): EventItem {
+  const {
+    id,
+    title,
+    body,
+    tag,
+    timeLabel,
+    impact,
+    impactScope,
+    relatedAssets,
+    impactNote,
+    watchZh,
+    detailExtras,
+  } = params;
+  const impactScopeLabel = warRoomImpactScopeLabel(impactScope);
+  const detail: EventDetail = {
+    source: tag,
+    timeLabel,
+    title,
+    summary: body || undefined,
+    bullets: [],
+    tickers: relatedAssets,
+    relatedAssets,
+    watchZh,
+    impactNote,
+    impactScopeLabel,
+    ...detailExtras,
+  };
+  return {
+    id,
+    title,
+    body: body.slice(0, 160),
+    tag,
+    impact,
+    impactScope,
+    impactLabel: formatWarRoomImpactLabel(impact, impactScope),
+    impactNote,
+    relatedAssets,
+    watchZh,
+    time: timeLabel,
+    detail,
+  };
+}
+
+/** Prefer backend war-room events (LLM impact labels); fallback to unified feed + macro + news. */
+function eventsFromMvpWarRoom(mvp: JsonRecord | null): EventItem[] {
+  const rows = getEvents(mvp);
+  if (rows.length === 0) return [];
+
+  return rows.map((ev) => {
+    const title = text(ev.title, "市场事件");
+    const body = text(ev.body);
+    const timeRaw = text(ev.time) || text(ev.created_at_utc);
+    const timeLabel = timeRaw ? zhTime(timeRaw) : "—";
+    const impact = normalizeWarRoomImpact(text(ev.impact, "中性"));
+    const impactScope = normalizeWarRoomImpactScope(text(ev.impact_scope, "equity_broad"));
+    const relatedAssets = mergeRelatedAssets(ev.related_assets, ev.tickers);
+    const impactNote = text(ev.impact_note_zh) || undefined;
+    const watchZh = text(ev.watch_zh) || undefined;
+    return makeWarRoomEventItem({
+      id: text(ev.id, `${timeLabel}-${title}`),
+      title,
+      body,
+      tag: text(ev.tag, "Discord"),
+      timeLabel,
+      impact,
+      impactScope,
+      relatedAssets,
+      impactNote,
+      watchZh,
+    });
+  });
+}
+
 function buildWarRoomEvents(data: WarRoomData): EventItem[] {
+  const fromMvp = eventsFromMvpWarRoom(data.mvp.data);
+  if (fromMvp.length > 0) return fromMvp.slice(0, 8);
+
   const events: EventItem[] = [];
   const now = Date.now();
 
@@ -516,15 +640,21 @@ function buildWarRoomEvents(data: WarRoomData): EventItem[] {
   for (const item of feedItems) {
     const detail = eventDetailFromFeed(item);
     const preview = eventPreviewBody(detail);
-    events.push({
-      id: item.id,
-      title: item.title,
-      body: preview,
-      tag: item.kind === "discord" ? "Discord" : item.kind === "macro" ? "宏观" : "新闻",
-      impact: feedItemImpact(item),
-      time: detail.timeLabel,
-      detail,
-    });
+    const impact = feedItemImpact(item);
+    const scope: WarRoomImpactScope = item.kind === "macro" ? "macro_geo" : "equity_broad";
+    events.push(
+      makeWarRoomEventItem({
+        id: item.id,
+        title: item.title,
+        body: preview,
+        tag: item.kind === "discord" ? "Discord" : item.kind === "macro" ? "宏观" : "新闻",
+        timeLabel: detail.timeLabel,
+        impact,
+        impactScope: scope,
+        relatedAssets: detail.relatedAssets,
+        detailExtras: detail,
+      }),
+    );
   }
 
   const macroEvents = getEvents(data.macro.data)
@@ -547,48 +677,48 @@ function buildWarRoomEvents(data: WarRoomData): EventItem[] {
       .filter(Boolean)
       .join(" · ");
     const timeLabel = zhTime(ev.date);
-    const detail: EventDetail = {
-      source: "",
-      timeLabel,
-      title,
-      summary,
-      bullets: [],
-      rawOriginal: eventName,
-      tickers: [],
-    };
-    events.push({
-      id: `macro-${timeLabel}-${title}`,
-      title,
-      body: summary.slice(0, 160),
-      tag: text(ev.impact) === "High" ? "高影响" : "中影响",
-      impact,
-      time: timeLabel,
-      detail,
-    });
+    events.push(
+      makeWarRoomEventItem({
+        id: `macro-${timeLabel}-${title}`,
+        title,
+        body: summary.slice(0, 160),
+        tag: text(ev.impact) === "High" ? "高影响" : "中影响",
+        timeLabel,
+        impact: impact as WarRoomImpact,
+        impactScope: "macro_geo",
+        relatedAssets: [],
+        detailExtras: {
+          source: "",
+          summary,
+          bullets: [],
+          rawOriginal: eventName,
+        },
+      }),
+    );
   }
 
   for (const article of getArticles(data.news.data).slice(0, 3)) {
     const title = text(article.title_zh) || text(article.title, "市场新闻");
     const summary = text(article.summary_zh) || text(article.content);
     const timeLabel = zhTime(article.published_at ?? article.publishedDate ?? article.date);
-    const detail: EventDetail = {
-      source: "",
-      timeLabel,
-      title,
-      summary: summary || undefined,
-      bullets: [],
-      rawOriginal: text(article.content) || undefined,
-      tickers: asArray(article.symbols).map((s) => String(s)).filter(Boolean),
-    };
-    events.push({
-      id: `news-${timeLabel}-${title}`,
-      title,
-      body: summary.slice(0, 160),
-      tag: "新闻",
-      impact: "中性",
-      time: timeLabel,
-      detail,
-    });
+    const symbols = asArray(article.symbols).map((s) => String(s)).filter(Boolean);
+    events.push(
+      makeWarRoomEventItem({
+        id: `news-${timeLabel}-${title}`,
+        title,
+        body: summary.slice(0, 160),
+        tag: "新闻",
+        timeLabel,
+        impact: "中性",
+        impactScope: symbols.length === 1 ? "single_stock" : "equity_broad",
+        relatedAssets: symbols,
+        detailExtras: {
+          source: "",
+          summary: summary || undefined,
+          rawOriginal: text(article.content) || undefined,
+        },
+      }),
+    );
   }
 
   const seen = new Set<string>();
@@ -1287,13 +1417,24 @@ export default function MvpInsightsPage({ variant = "standalone" }: MvpInsightsP
                       >
                         <div className="flex flex-wrap items-center gap-2">
                           <Pill tone={event.impact === "利好" ? "green" : event.impact === "利空" || event.impact === "风险" ? "red" : "muted"}>
-                            {event.impact}
+                            {event.impactLabel}
                           </Pill>
+                          {event.relatedAssets.slice(0, 3).map((sym) => (
+                            <Pill key={`${event.id}-${sym}`} tone="blue">
+                              {sym}
+                            </Pill>
+                          ))}
                           <span className="ml-auto shrink-0 font-mono text-xs text-gold">{event.time}</span>
                         </div>
                         <div className="mt-2 text-sm font-medium text-foreground">{event.title}</div>
+                        {event.impactNote ? (
+                          <p className="mt-1 text-[11px] leading-4 text-gold/85">{event.impactNote}</p>
+                        ) : null}
                         {event.body ? (
                           <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{event.body}</p>
+                        ) : null}
+                        {event.watchZh ? (
+                          <p className="mt-1 line-clamp-1 text-[10px] leading-4 text-muted">{event.watchZh}</p>
                         ) : null}
                         <p className="mt-1 text-[10px] text-muted">点击查看阿吉解读详情</p>
                       </button>
@@ -1709,6 +1850,7 @@ export default function MvpInsightsPage({ variant = "standalone" }: MvpInsightsP
           <EventDetailModal
             detail={selectedEvent.detail}
             impact={selectedEvent.impact}
+            impactLabel={selectedEvent.impactLabel}
             onClose={() => setSelectedEvent(null)}
           />
         ) : null}
