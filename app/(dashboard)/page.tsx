@@ -1,5 +1,5 @@
-import DashboardHome from "@/components/dashboard/DashboardHome";
+import MvpInsightsPage from "@/components/mvp/MvpInsightsPage";
 
 export default function HomePage() {
-  return <DashboardHome />;
+  return <MvpInsightsPage variant="dashboard" />;
 }

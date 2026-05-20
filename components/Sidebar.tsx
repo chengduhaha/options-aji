@@ -35,7 +35,8 @@ const NAV_GROUPS = [
   {
     label: null,
     items: [
-      { id: "dash", label: "市场总览", href: "/", icon: LayoutDashboard },
+      { id: "aji_insights", label: "阿吉市场洞察", href: "/", icon: Zap },
+      { id: "dash", label: "市场总览", href: "/market", icon: LayoutDashboard },
       { id: "scanner", label: "期权扫描器", href: "/scanner", icon: ScanLine },
       { id: "stock", label: "个股深度", href: "/stock/SPY", icon: LineChart },
       { id: "feed", label: "统一信息流", href: "/feed", icon: RadioTower },
@@ -75,9 +76,11 @@ function NavItem({
 }) {
   const Icon = item.icon;
   const isActive =
-    item.id === "dash"
+    item.id === "aji_insights"
       ? pathname === "/"
-      : item.id === "stock"
+      : item.id === "dash"
+        ? pathname === "/market" || pathname.startsWith("/market/")
+        : item.id === "stock"
         ? pathname.startsWith("/stock")
         : item.id === "scanner"
           ? pathname === "/scanner"

@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
       { source: "/qa", destination: "/ai", permanent: false },
       { source: "/signals", destination: "/feed", permanent: false },
       { source: "/gex", destination: "/stock/SPY/gex", permanent: false },
-      { source: "/insider", destination: "/", permanent: false },
+      { source: "/insider", destination: "/market", permanent: false },
     ];
   },
 };
