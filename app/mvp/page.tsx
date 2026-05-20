@@ -21,6 +21,7 @@ import {
   TrendingDown,
   TrendingUp,
   WalletCards,
+  X,
 } from "lucide-react";
 import {
   Area,
@@ -75,13 +76,153 @@ type StockReport = {
   strategy: AsyncSlot<JsonRecord>;
 };
 
+type EventDetail = {
+  source: string;
+  timeLabel: string;
+  title: string;
+  summary?: string;
+  bullets: string[];
+  riskNote?: string;
+  rawOriginal?: string;
+  tickers: string[];
+};
+
 type EventItem = {
+  id: string;
   title: string;
   body: string;
   tag: string;
   impact: "利好" | "利空" | "中性" | "风险";
-  time?: string;
+  time: string;
+  detail: EventDetail;
 };
+
+function eventDetailFromFeed(item: FeedItemContract): EventDetail {
+  const bullets = (item.bullets_zh ?? []).filter((b) => typeof b === "string" && b.trim());
+  return {
+    source: item.kind === "discord" ? "Discord" : item.kind,
+    timeLabel: zhTime(item.created_at_utc),
+    title: item.title,
+    summary: item.body.trim() || undefined,
+    bullets,
+    riskNote: item.risk_note_zh?.trim() || undefined,
+    rawOriginal: item.raw_body?.trim() || undefined,
+    tickers: item.tickers ?? [],
+  };
+}
+
+function eventPreviewBody(detail: EventDetail, maxLen = 160): string {
+  if (detail.bullets.length > 0) return detail.bullets.join(" · ").slice(0, maxLen);
+  if (detail.summary) return detail.summary.slice(0, maxLen);
+  if (detail.rawOriginal) return detail.rawOriginal.slice(0, maxLen);
+  return "";
+}
+
+function EventDetailModal({
+  detail,
+  impact,
+  onClose,
+}: {
+  detail: EventDetail;
+  impact: EventItem["impact"];
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm"
+      role="presentation"
+      onClick={onClose}
+    >
+      <div
+        className="glass relative max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-xl border border-glass-border p-5 shadow-2xl"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="event-detail-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute right-3 top-3 rounded-md p-1 text-muted-foreground transition hover:bg-white/10 hover:text-foreground"
+          aria-label="关闭"
+        >
+          <X className="h-5 w-5" />
+        </button>
+
+        <div className="flex flex-wrap items-center gap-2 pr-8">
+          <Pill tone={impact === "利好" ? "green" : impact === "利空" || impact === "风险" ? "red" : "muted"}>
+            {impact}
+          </Pill>
+          <span className="text-xs text-muted">{detail.source}</span>
+          <span className="ml-auto font-mono text-xs text-gold">{detail.timeLabel}</span>
+        </div>
+
+        <h2 id="event-detail-title" className="mt-4 text-lg font-semibold leading-snug text-foreground">
+          {detail.title}
+        </h2>
+
+        {detail.tickers.length > 0 ? (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {detail.tickers.map((t) => (
+              <Pill key={t} tone="blue">
+                {t}
+              </Pill>
+            ))}
+          </div>
+        ) : null}
+
+        {detail.summary ? (
+          <section className="mt-4">
+            <h3 className="text-[11px] uppercase tracking-wider text-muted">AI 摘要</h3>
+            <p className="mt-2 text-sm leading-6 text-muted-foreground whitespace-pre-wrap">{detail.summary}</p>
+          </section>
+        ) : null}
+
+        {detail.bullets.length > 0 ? (
+          <section className="mt-4">
+            <h3 className="text-[11px] uppercase tracking-wider text-muted">要点解读</h3>
+            <ul className="mt-2 space-y-2">
+              {detail.bullets.map((bullet) => (
+                <li key={bullet} className="flex gap-2 text-sm leading-6 text-foreground">
+                  <span className="text-gold">·</span>
+                  <span>{bullet}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : null}
+
+        {detail.riskNote ? (
+          <section className="mt-4 rounded-lg border border-red/20 bg-red/10 px-3 py-2">
+            <h3 className="text-[11px] uppercase tracking-wider text-red">风险提示</h3>
+            <p className="mt-1 text-sm leading-6 text-red/90 whitespace-pre-wrap">{detail.riskNote}</p>
+          </section>
+        ) : null}
+
+        {detail.rawOriginal ? (
+          <section className="mt-4">
+            <h3 className="text-[11px] uppercase tracking-wider text-muted">原文</h3>
+            <p className="mt-2 rounded-lg border border-border2 bg-white/[0.02] px-3 py-2 text-xs leading-6 text-muted-foreground whitespace-pre-wrap">
+              {detail.rawOriginal}
+            </p>
+          </section>
+        ) : null}
+
+        {!detail.summary && detail.bullets.length === 0 && !detail.rawOriginal ? (
+          <p className="mt-4 text-sm text-muted">暂无 AI 增强内容，请稍后刷新或查看其他消息。</p>
+        ) : null}
+      </div>
+    </div>
+  );
+}
 
 type OptionCandidate = {
   side: "call" | "put";
@@ -305,34 +446,22 @@ function feedItemImpact(item: FeedItemContract): EventItem["impact"] {
 function buildWarRoomEvents(data: WarRoomData): EventItem[] {
   const events: EventItem[] = [];
   const now = Date.now();
-  const mvpEvents = asArray(data.mvp.data?.events).map(asRecord);
-
-  for (const item of mvpEvents.slice(0, 8)) {
-    events.push({
-      title: text(item.title, "盘前事件"),
-      body: text(item.watch_zh) || text(item.body) || text(item.summary_zh),
-      tag: text(item.tag, "AI筛选"),
-      impact: ["利好", "利空", "中性", "风险"].includes(text(item.impact))
-        ? (text(item.impact) as EventItem["impact"])
-        : "中性",
-      time: zhTime(item.time ?? item.created_at_utc ?? item.event_time),
-    });
-  }
 
   const feedItems = [...(data.feed.data?.items ?? [])]
     .filter((item) => ACTIVE_EVENT_KINDS.has(item.kind))
     .sort((a, b) => new Date(b.created_at_utc).getTime() - new Date(a.created_at_utc).getTime());
-  for (const item of feedItems.slice(0, 5)) {
-    const body =
-      item.bullets_zh?.filter(Boolean).join(" ") ||
-      item.risk_note_zh ||
-      item.body.slice(0, 200);
+
+  for (const item of feedItems) {
+    const detail = eventDetailFromFeed(item);
+    const preview = eventPreviewBody(detail);
     events.push({
+      id: item.id,
       title: item.title,
-      body,
-      tag: item.kind === "discord" ? "Discord" : item.kind === "macro" ? "宏观情报" : "新闻",
+      body: preview,
+      tag: item.kind === "discord" ? "Discord" : item.kind === "macro" ? "宏观" : "新闻",
       impact: feedItemImpact(item),
-      time: zhTime(item.created_at_utc),
+      time: detail.timeLabel,
+      detail,
     });
   }
 
@@ -346,38 +475,65 @@ function buildWarRoomEvents(data: WarRoomData): EventItem[] {
   for (const { ev } of macroEvents) {
     const impact = text(ev.impact) === "High" ? "风险" : "中性";
     const eventName = text(ev.event, "宏观事件");
+    const title = macroEventTitleZh(eventName);
+    const summary = [
+      text(ev.country) === "US" ? "美国" : text(ev.country),
+      ev.estimate != null ? `预期 ${String(ev.estimate)}` : "",
+      ev.previous != null ? `前值 ${String(ev.previous)}` : "",
+      eventName !== title ? `原文：${eventName}` : "",
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    const timeLabel = zhTime(ev.date);
+    const detail: EventDetail = {
+      source: "宏观日历",
+      timeLabel,
+      title,
+      summary,
+      bullets: [],
+      rawOriginal: eventName,
+      tickers: [],
+    };
     events.push({
-      title: macroEventTitleZh(eventName),
-      body: [
-        text(ev.country) === "US" ? "美国" : text(ev.country),
-        ev.estimate != null ? `预期 ${String(ev.estimate)}` : "",
-        ev.previous != null ? `前值 ${String(ev.previous)}` : "",
-        eventName !== macroEventTitleZh(eventName) ? `原文：${eventName}` : "",
-      ]
-        .filter(Boolean)
-        .join(" · "),
+      id: `macro-${timeLabel}-${title}`,
+      title,
+      body: summary.slice(0, 160),
       tag: text(ev.impact) === "High" ? "高影响" : "中影响",
       impact,
-      time: zhTime(ev.date),
+      time: timeLabel,
+      detail,
     });
   }
 
   for (const article of getArticles(data.news.data).slice(0, 3)) {
+    const title = text(article.title_zh) || text(article.title, "市场新闻");
+    const summary = text(article.summary_zh) || text(article.content);
+    const timeLabel = zhTime(article.published_at ?? article.publishedDate ?? article.date);
+    const detail: EventDetail = {
+      source: text(article.source, "News"),
+      timeLabel,
+      title,
+      summary: summary || undefined,
+      bullets: [],
+      rawOriginal: text(article.content) || undefined,
+      tickers: asArray(article.symbols).map((s) => String(s)).filter(Boolean),
+    };
     events.push({
-      title: text(article.title_zh) || text(article.title, "市场新闻"),
-      body: text(article.summary_zh) || text(article.content).slice(0, 160),
-      tag: text(article.source, "News"),
+      id: `news-${timeLabel}-${title}`,
+      title,
+      body: summary.slice(0, 160),
+      tag: "新闻",
       impact: "中性",
-      time: zhTime(article.published_at ?? article.publishedDate ?? article.date),
+      time: timeLabel,
+      detail,
     });
   }
 
   const seen = new Set<string>();
   return events
     .filter((ev) => {
-      const key = `${ev.title}|${ev.time ?? ""}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
+      if (seen.has(ev.id)) return false;
+      seen.add(ev.id);
       return true;
     })
     .slice(0, 8);
@@ -742,6 +898,7 @@ export default function MvpPage() {
   const [direction, setDirection] = useState<Direction>("bull");
   const [report, setReport] = useState<StockReport | null>(null);
   const [reportLoading, setReportLoading] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<EventItem | null>(null);
 
   useEffect(() => {
     try {
@@ -962,12 +1119,9 @@ export default function MvpPage() {
 
             <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px]">
               <div className="min-h-[220px]">
-                <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
+                <div className="mb-2 flex items-center gap-2 text-xs text-muted">
                   <Newspaper className="h-4 w-4 text-blue" />
                   <span>盘前关键事件</span>
-                  <span className="text-[10px] text-muted-foreground">
-                    （Discord 滚动 {DISCORD_EVENT_HOURS}h）
-                  </span>
                 </div>
                 <div className="space-y-2">
                   {warLoading && events.length === 0 ? (
@@ -975,18 +1129,26 @@ export default function MvpPage() {
                   ) : events.length === 0 ? (
                     <EmptyLine text="暂无高优先级事件，先观察指数、VIX 与开盘前成交量。" />
                   ) : (
-                    events.slice(0, 5).map((event, index) => (
-                      <div key={`${event.title}-${index}`} className="rounded-lg border border-border2 bg-white/[0.02] px-3 py-2">
+                    events.slice(0, 8).map((event) => (
+                      <button
+                        key={event.id}
+                        type="button"
+                        onClick={() => setSelectedEvent(event)}
+                        className="w-full rounded-lg border border-border2 bg-white/[0.02] px-3 py-2 text-left transition hover:border-gold/35 hover:bg-white/[0.04]"
+                      >
                         <div className="flex flex-wrap items-center gap-2">
                           <Pill tone={event.impact === "利好" ? "green" : event.impact === "利空" || event.impact === "风险" ? "red" : "muted"}>
                             {event.impact}
                           </Pill>
                           <span className="text-xs text-muted">{event.tag}</span>
-                          {event.time ? <span className="text-xs text-muted">{event.time}</span> : null}
+                          <span className="ml-auto shrink-0 font-mono text-xs text-gold">{event.time}</span>
                         </div>
                         <div className="mt-2 text-sm font-medium text-foreground">{event.title}</div>
-                        {event.body ? <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{event.body}</p> : null}
-                      </div>
+                        {event.body ? (
+                          <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{event.body}</p>
+                        ) : null}
+                        <p className="mt-1 text-[10px] text-muted">点击查看 AI 解读详情</p>
+                      </button>
                     ))
                   )}
                 </div>
@@ -1319,6 +1481,14 @@ export default function MvpPage() {
             </div>
           </Card>
         </section>
+
+        {selectedEvent ? (
+          <EventDetailModal
+            detail={selectedEvent.detail}
+            impact={selectedEvent.impact}
+            onClose={() => setSelectedEvent(null)}
+          />
+        ) : null}
 
         <footer className="flex flex-wrap items-center justify-between gap-3 pb-6 text-xs text-muted">
           <span>教育和分析用途，不构成投资建议。</span>
