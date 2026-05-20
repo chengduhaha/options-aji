@@ -64,6 +64,28 @@ export interface AgentBriefContract {
   brief?: string;
 }
 
+export type MvpMarketRegimeLabel = "风险优先" | "顺势进攻" | "等待确认";
+
+export interface MvpMarketInsightsContract {
+  regime: {
+    label: MvpMarketRegimeLabel | string;
+    summary: string;
+    reasoning?: string;
+    basis?: string[];
+  };
+  vix_chart: { caption: string };
+  vix: { interpretation: string };
+  pcr: { interpretation: string };
+  treasury: {
+    label: string;
+    summary: string;
+    spreads?: Record<string, number | null>;
+  };
+  engine: "deepagents" | "fallback" | "rules";
+  generated_at_utc: string;
+  cached?: boolean;
+}
+
 export interface StockOverviewContract {
   symbol: string;
   priceSeries: Array<{ date: string; close: number | null }>;

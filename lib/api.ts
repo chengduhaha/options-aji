@@ -13,6 +13,7 @@ import type {
   FeedEnvelopeContract,
   KolDirectoryContract,
   MarketOverviewContract,
+  MvpMarketInsightsContract,
   PushSettingsContract,
   ResonanceStreamContract,
   ScannerRunContract,
@@ -123,6 +124,7 @@ export const api = {
     aiSummary: () => fetchJSON("/api/market/ai-summary"),
     brief: () => fetchJSON<AgentBriefContract>("/api/agent/brief"),
     signalsFeed: () => fetchJSON<SignalsFeedEnvelopeContract>("/api/signals/feed"),
+    mvpMarketInsights: () => fetchJSON<MvpMarketInsightsContract>("/api/mvp/market-insights"),
   },
 
   options: {

@@ -34,6 +34,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import { interpretPCR, interpretVix } from "@/components/shared/DataLabel";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import type {
@@ -41,6 +42,7 @@ import type {
   FeedEnvelopeContract,
   FeedItemContract,
   MarketOverviewContract,
+  MvpMarketInsightsContract,
   SignalCardContract,
   SignalsFeedEnvelopeContract,
   SmartVsRetailContract,
@@ -58,6 +60,7 @@ type AsyncSlot<T> = {
 type WarRoomData = {
   mvp: AsyncSlot<JsonRecord>;
   overview: AsyncSlot<MarketOverviewContract>;
+  marketInsights: AsyncSlot<MvpMarketInsightsContract>;
   brief: AsyncSlot<{ brief?: string }>;
   macro: AsyncSlot<JsonRecord>;
   treasury: AsyncSlot<JsonRecord>;
@@ -100,7 +103,7 @@ type EventItem = {
 function eventDetailFromFeed(item: FeedItemContract): EventDetail {
   const bullets = (item.bullets_zh ?? []).filter((b) => typeof b === "string" && b.trim());
   return {
-    source: item.kind === "discord" ? "Discord" : item.kind,
+    source: "",
     timeLabel: zhTime(item.created_at_utc),
     title: item.title,
     summary: item.body.trim() || undefined,
@@ -161,7 +164,6 @@ function EventDetailModal({
           <Pill tone={impact === "利好" ? "green" : impact === "利空" || impact === "风险" ? "red" : "muted"}>
             {impact}
           </Pill>
-          <span className="text-xs text-muted">{detail.source}</span>
           <span className="ml-auto font-mono text-xs text-gold">{detail.timeLabel}</span>
         </div>
 
@@ -248,6 +250,7 @@ const ACTIVE_EVENT_KINDS = new Set(["discord", "macro", "news"]);
 const EMPTY_WAR_ROOM: WarRoomData = {
   mvp: { data: null, error: null },
   overview: { data: null, error: null },
+  marketInsights: { data: null, error: null },
   brief: { data: null, error: null },
   macro: { data: null, error: null },
   treasury: { data: null, error: null },
@@ -399,10 +402,22 @@ function getTreasuryRows(payload: JsonRecord | null): JsonRecord[] {
   return asArray(payload.rates).map(asRecord);
 }
 
-function classifyMarket(overview: MarketOverviewContract | null, signals: SignalCardContract[]) {
+type MarketStateView = {
+  label: string;
+  tone: string;
+  icon: typeof TrendingUp;
+  summary: string;
+  /** 规则引擎依据（非 LLM），便于用户核对是否合理 */
+  basis: string[];
+  engineNote: string;
+};
+
+function classifyMarket(overview: MarketOverviewContract | null, signals: SignalCardContract[]): MarketStateView {
   const spy = overview?.pulse.find((p) => p.symbol === "SPY")?.changePct ?? null;
   const qqq = overview?.pulse.find((p) => p.symbol === "QQQ")?.changePct ?? null;
+  const vix = overview?.volatility.vix ?? null;
   const vixChange = overview?.volatility.vixChangePct ?? null;
+  const vixBand = overview?.volatility.band ?? "—";
   const avgIndex =
     spy !== null && qqq !== null ? (spy + qqq) / 2 : spy !== null ? spy : qqq !== null ? qqq : 0;
   const signalScore = signals.reduce((sum, sig) => {
@@ -411,12 +426,26 @@ function classifyMarket(overview: MarketOverviewContract | null, signals: Signal
     return sum;
   }, 0);
 
+  const basis: string[] = [
+    `SPY 涨跌 ${spy !== null ? pct(spy) : "—"}，QQQ 涨跌 ${qqq !== null ? pct(qqq) : "—"}，指数均值约 ${pct(avgIndex)}`,
+    `VIX 现价 ${vix !== null ? vix.toFixed(2) : "—"}（${vixBand}），日变化 ${vixChange !== null ? pct(vixChange) : "—"}`,
+    `信号综合得分 ${signalScore}（看多信号加分、看空减分，来自 /api/signals/feed）`,
+  ];
+
+  const engineNote = "阿吉深度洞察暂不可用，以下为盘面依据供对照。";
+
   if (avgIndex <= -0.35 || (vixChange !== null && vixChange > 3) || signalScore <= -5) {
+    const triggers: string[] = [];
+    if (avgIndex <= -0.35) triggers.push("指数均值 ≤ -0.35%");
+    if (vixChange !== null && vixChange > 3) triggers.push("VIX 日涨幅 > 3%");
+    if (signalScore <= -5) triggers.push("信号得分 ≤ -5（偏空）");
     return {
       label: "风险优先",
       tone: "text-red",
       icon: TrendingDown,
-      summary: "指数或波动率显示压力，盘前计划应先定义失效条件，再考虑方向。",
+      summary: "指数或波动率显示压力，应先定义失效条件，再考虑方向。",
+      basis: [...basis, `触发：${triggers.join(" 或 ")}`],
+      engineNote,
     };
   }
   if (avgIndex >= 0.35 && (vixChange === null || vixChange < 2) && signalScore >= 0) {
@@ -424,14 +453,50 @@ function classifyMarket(overview: MarketOverviewContract | null, signals: Signal
       label: "顺势进攻",
       tone: "text-green",
       icon: TrendingUp,
-      summary: "盘前风险偏好偏积极，优先寻找强势板块中的回踩机会。",
+      summary: "风险偏好偏积极，优先寻找强势板块中的回踩机会。",
+      basis: [...basis, "触发：指数均值 ≥ +0.35% 且 VIX 未急升 且 信号得分 ≥ 0"],
+      engineNote,
     };
   }
   return {
     label: "等待确认",
     tone: "text-gold",
     icon: Gauge,
-    summary: "数据没有形成单边共识，开盘前 30 分钟适合缩小观察名单。",
+    summary: "多空信号未形成共识，适合缩小观察名单、等待量价确认。",
+    basis: [...basis, "触发：未满足「风险优先」或「顺势进攻」条件"],
+    engineNote,
+  };
+}
+
+function regimeTone(label: string): string {
+  if (label === "风险优先") return "text-red";
+  if (label === "顺势进攻") return "text-green";
+  return "text-gold";
+}
+
+function regimeIcon(label: string): typeof TrendingUp {
+  if (label === "风险优先") return TrendingDown;
+  if (label === "顺势进攻") return TrendingUp;
+  return Gauge;
+}
+
+function engineNoteFromInsights(insights: MvpMarketInsightsContract | null): string {
+  if (!insights) return "阿吉深度洞察暂不可用";
+  return "阿吉深度洞察 · 每 5 分钟更新";
+}
+
+function marketStateFromInsights(
+  insights: MvpMarketInsightsContract,
+  fallback: MarketStateView,
+): MarketStateView {
+  const label = insights.regime.label || fallback.label;
+  return {
+    label,
+    tone: regimeTone(label),
+    icon: regimeIcon(label),
+    summary: insights.regime.summary || fallback.summary,
+    basis: insights.regime.basis?.length ? insights.regime.basis : fallback.basis,
+    engineNote: engineNoteFromInsights(insights),
   };
 }
 
@@ -486,7 +551,7 @@ function buildWarRoomEvents(data: WarRoomData): EventItem[] {
       .join(" · ");
     const timeLabel = zhTime(ev.date);
     const detail: EventDetail = {
-      source: "宏观日历",
+      source: "",
       timeLabel,
       title,
       summary,
@@ -510,7 +575,7 @@ function buildWarRoomEvents(data: WarRoomData): EventItem[] {
     const summary = text(article.summary_zh) || text(article.content);
     const timeLabel = zhTime(article.published_at ?? article.publishedDate ?? article.date);
     const detail: EventDetail = {
-      source: text(article.source, "News"),
+      source: "",
       timeLabel,
       title,
       summary: summary || undefined,
@@ -715,7 +780,7 @@ function buildTradePlan(args: {
   if (args.brief?.trim()) {
     plan.push(args.brief.trim());
   }
-  const topEvent = args.events.find((event) => event.tag === "Discord") ?? args.events[0];
+  const topEvent = args.events[0];
   if (topEvent) {
     plan.push(`盘前主线先围绕「${topEvent.title}」做情景推演，相关标的只等开盘后量价确认。`);
   }
@@ -914,9 +979,10 @@ export default function MvpPage() {
     if (!opts?.silent) setWarLoading(true);
     const today = beijingDateString(0);
     const tomorrow = beijingDateString(1);
-    const [mvp, overview, brief, macro, treasury, news, feed, signals] = await Promise.all([
+    const [mvp, overview, marketInsights, brief, macro, treasury, news, feed, signals] = await Promise.all([
       settle<JsonRecord>(() => fetchJson(`/api/mvp/war-room?hours=${DISCORD_EVENT_HOURS}`)),
       settle<MarketOverviewContract>(() => api.market.overview()),
+      settle<MvpMarketInsightsContract>(() => api.market.mvpMarketInsights()),
       settle<{ brief?: string }>(() => api.market.brief() as Promise<{ brief?: string }>),
       settle<JsonRecord>(() => api.macro.calendar(today, tomorrow, "US") as Promise<JsonRecord>),
       settle<JsonRecord>(() => api.macro.treasury(30) as Promise<JsonRecord>),
@@ -926,9 +992,10 @@ export default function MvpPage() {
       ),
       settle<SignalsFeedEnvelopeContract>(() => api.market.signalsFeed()),
     ]);
-    setWarRoom({ mvp, overview, brief, macro, treasury, news, feed, signals });
+    setWarRoom({ mvp, overview, marketInsights, brief, macro, treasury, news, feed, signals });
     const mvpGenerated = text(mvp.data?.generated_at_utc);
-    setWarRoomUpdatedAt(mvpGenerated || new Date().toISOString());
+    const insightsGenerated = text(marketInsights.data?.generated_at_utc);
+    setWarRoomUpdatedAt(insightsGenerated || mvpGenerated || new Date().toISOString());
     if (!opts?.silent) setWarLoading(false);
   }, []);
 
@@ -969,7 +1036,11 @@ export default function MvpPage() {
   }, []);
 
   const signals = warRoom.signals.data?.signals ?? [];
-  const marketState = classifyMarket(warRoom.overview.data, signals);
+  const ruleMarketState = classifyMarket(warRoom.overview.data, signals);
+  const aiInsights = warRoom.marketInsights.data;
+  const marketState = aiInsights
+    ? marketStateFromInsights(aiInsights, ruleMarketState)
+    : ruleMarketState;
   const MarketIcon = marketState.icon;
   const events = useMemo(() => buildWarRoomEvents(warRoom), [warRoom]);
   const treasuryRows = getTreasuryRows(warRoom.treasury.data);
@@ -980,25 +1051,36 @@ export default function MvpPage() {
     { term: "10Y", rate: num(latestTreasury.year10 ?? latestTreasury["10Y"]) },
     { term: "30Y", rate: num(latestTreasury.year30 ?? latestTreasury["30Y"]) },
   ].filter((row): row is { term: string; rate: number } => row.rate !== null);
-  const mvpTreasuryRead = asRecord(warRoom.mvp.data?.treasury_read);
-  const treasuryRead = text(mvpTreasuryRead.summary_zh)
+  const ruleTreasuryRead = buildTreasuryRead(latestTreasury);
+  const treasuryRead = aiInsights?.treasury?.summary
     ? {
-        label: text(mvpTreasuryRead.label, "AI解读"),
-        summary: text(mvpTreasuryRead.summary_zh),
-        spreads: asRecord(mvpTreasuryRead.spreads),
+        label: aiInsights.treasury.label || "阿吉解读",
+        summary: aiInsights.treasury.summary,
+        spreads: aiInsights.treasury.spreads ?? ruleTreasuryRead.spreads,
       }
-    : buildTreasuryRead(latestTreasury);
+    : ruleTreasuryRead;
   const treasurySpreads = asRecord(treasuryRead.spreads);
   const spread10y2y = num(treasurySpreads.spread10y2y ?? treasurySpreads["10y_2y"]);
   const spread30y10y = num(treasurySpreads.spread30y10y ?? treasurySpreads["30y_10y"]);
   const overview = warRoom.overview.data;
   const pulseRows = overview?.pulse ?? [];
-  const vixSeries = (overview?.volatility.vixSeries ?? []).map((value, index) => ({
-    day: String(index + 1),
-    value,
-  }));
+  const vixHistory = overview?.volatility.vixSeries ?? [];
+  const vixSeries = vixHistory.map((value, index) => {
+    const offset = vixHistory.length - 1 - index;
+    const dayLabel = offset === 0 ? "今" : `-${offset}日`;
+    return { day: dayLabel, value };
+  });
+  const vixLevel = overview?.volatility.vix ?? null;
+  const vixChangePct = overview?.volatility.vixChangePct ?? null;
+  const vixReadFallback = vixLevel !== null ? interpretVix(vixLevel) : null;
+  const vixInterpretation = aiInsights?.vix?.interpretation || vixReadFallback?.interpretation;
+  const pcr = overview?.liquidity.putCallRatioVolumeApprox ?? null;
+  const pcrReadFallback = pcr !== null ? interpretPCR(pcr) : null;
+  const pcrInterpretation = aiInsights?.pcr?.interpretation || pcrReadFallback?.interpretation;
+  const vixChartCaption = aiInsights?.vix_chart?.caption ?? "";
   const allWarErrors = reportErrors([
     { slot: warRoom.overview, key: "overview" },
+    { slot: warRoom.marketInsights, key: "marketInsights" },
     { slot: warRoom.brief, key: "brief" },
     { slot: warRoom.macro, key: "macro" },
     { slot: warRoom.news, key: "news" },
@@ -1075,7 +1157,7 @@ export default function MvpPage() {
             <button
               type="button"
               onClick={() => void loadWarRoom()}
-              title="立即刷新市场总览与 Discord 事件"
+              title="立即刷新市场总览"
               className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-gold/10 px-3 py-2 text-sm text-gold transition hover:bg-gold/15"
             >
               <RefreshCw className={`h-4 w-4 ${warLoading ? "animate-spin" : ""}`} />
@@ -1094,14 +1176,23 @@ export default function MvpPage() {
                 </div>
                 {warRoomUpdatedAt ? (
                   <p className="mt-1 text-[10px] text-muted">
-                    Discord 最近 {DISCORD_EVENT_HOURS} 小时 · 每 5 分钟更新 · 上次 {zhTime(warRoomUpdatedAt)}
+                    每 5 分钟更新 · 事件窗口 {DISCORD_EVENT_HOURS} 小时 · 上次 {zhTime(warRoomUpdatedAt)}
                   </p>
                 ) : null}
-                <div className="mt-3 flex items-center gap-3">
-                  <MarketIcon className={`h-8 w-8 ${marketState.tone}`} />
-                  <div>
+                <div className="mt-3 flex items-start gap-3">
+                  <MarketIcon className={`h-8 w-8 shrink-0 ${marketState.tone}`} />
+                  <div className="min-w-0">
                     <div className={`text-xl font-semibold ${marketState.tone}`}>{marketState.label}</div>
                     <p className="mt-1 max-w-2xl text-sm leading-6 text-muted-foreground">{marketState.summary}</p>
+                    <p className="mt-2 text-[10px] leading-5 text-muted">{marketState.engineNote}</p>
+                    {aiInsights?.regime.reasoning ? (
+                      <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{aiInsights.regime.reasoning}</p>
+                    ) : null}
+                    <ul className="mt-1.5 space-y-0.5 text-[10px] leading-5 text-muted-foreground">
+                      {marketState.basis.map((line) => (
+                        <li key={line}>· {line}</li>
+                      ))}
+                    </ul>
                   </div>
                 </div>
               </div>
@@ -1140,14 +1231,13 @@ export default function MvpPage() {
                           <Pill tone={event.impact === "利好" ? "green" : event.impact === "利空" || event.impact === "风险" ? "red" : "muted"}>
                             {event.impact}
                           </Pill>
-                          <span className="text-xs text-muted">{event.tag}</span>
                           <span className="ml-auto shrink-0 font-mono text-xs text-gold">{event.time}</span>
                         </div>
                         <div className="mt-2 text-sm font-medium text-foreground">{event.title}</div>
                         {event.body ? (
                           <p className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground">{event.body}</p>
                         ) : null}
-                        <p className="mt-1 text-[10px] text-muted">点击查看 AI 解读详情</p>
+                        <p className="mt-1 text-[10px] text-muted">点击查看阿吉解读详情</p>
                       </button>
                     ))
                   )}
@@ -1155,29 +1245,73 @@ export default function MvpPage() {
               </div>
 
               <div className="space-y-3">
-                <div className="h-[120px] rounded-lg border border-border2 bg-white/[0.02] p-2">
-                  {vixSeries.length > 1 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={vixSeries}>
-                        <defs>
-                          <linearGradient id="vixFill" x1="0" x2="0" y1="0" y2="1">
-                            <stop offset="0%" stopColor="#f0b429" stopOpacity={0.4} />
-                            <stop offset="100%" stopColor="#f0b429" stopOpacity={0} />
-                          </linearGradient>
-                        </defs>
-                        <XAxis dataKey="day" hide />
-                        <YAxis hide domain={["auto", "auto"]} />
-                        <Tooltip contentStyle={{ background: "#0f1c30", border: "1px solid rgba(255,255,255,.1)" }} />
-                        <Area type="monotone" dataKey="value" stroke="#f0b429" fill="url(#vixFill)" strokeWidth={2} dot={false} />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  ) : (
-                    <div className="flex h-full items-center justify-center text-xs text-muted">VIX 序列不可用</div>
-                  )}
+                <div className="rounded-lg border border-border2 bg-white/[0.02] p-2">
+                  <div className="mb-1 flex items-center justify-between gap-2 text-[10px] text-muted">
+                    <span>VIX 恐慌指数 · 近 {vixHistory.length || 7} 日</span>
+                    <span className="text-muted-foreground">越高 = 波动/恐慌越强</span>
+                  </div>
+                  <div className="h-[100px]">
+                    {vixSeries.length > 1 ? (
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={vixSeries}>
+                          <defs>
+                            <linearGradient id="vixFill" x1="0" x2="0" y1="0" y2="1">
+                              <stop offset="0%" stopColor="#f0b429" stopOpacity={0.4} />
+                              <stop offset="100%" stopColor="#f0b429" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <XAxis dataKey="day" tick={{ fill: "#94a3b8", fontSize: 9 }} interval="preserveStartEnd" />
+                          <YAxis hide domain={["auto", "auto"]} />
+                          <Tooltip
+                            contentStyle={{ background: "#0f1c30", border: "1px solid rgba(255,255,255,.1)" }}
+                            formatter={(value: number) => [`${value.toFixed(2)}`, "VIX"]}
+                            labelFormatter={(label) => `交易日 ${label}`}
+                          />
+                          <Area type="monotone" dataKey="value" stroke="#f0b429" fill="url(#vixFill)" strokeWidth={2} dot={false} />
+                        </AreaChart>
+                      </ResponsiveContainer>
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-xs text-muted">VIX 历史序列暂不可用</div>
+                    )}
+                  </div>
+                  {vixChartCaption ? (
+                    <p className="mt-2 text-[11px] leading-5 text-muted-foreground">{vixChartCaption}</p>
+                  ) : warLoading ? (
+                    <p className="mt-2 text-[11px] text-muted">阿吉深度洞察生成中…</p>
+                  ) : null}
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Metric label="VIX" value={overview?.volatility.vix?.toFixed(2) ?? "—"} sub={pct(overview?.volatility.vixChangePct)} />
-                  <Metric label="P/C" value={overview?.liquidity.putCallRatioVolumeApprox?.toFixed(2) ?? "—"} sub="成交量近似" />
+                <div className="grid grid-cols-1 gap-2">
+                  <div className="rounded-lg border border-border2 bg-white/[0.02] px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wider text-muted">VIX</div>
+                    <div className="mt-1 flex flex-wrap items-baseline gap-2">
+                      <span className="font-mono text-lg font-semibold text-foreground">
+                        {vixLevel !== null ? vixLevel.toFixed(2) : "—"}
+                      </span>
+                      <span className={`font-mono text-xs ${(vixChangePct ?? 0) >= 0 ? "text-red" : "text-green"}`}>
+                        {pct(vixChangePct)}
+                      </span>
+                      {overview?.volatility.band ? (
+                        <Pill tone="muted">{overview.volatility.band}</Pill>
+                      ) : null}
+                    </div>
+                    {vixInterpretation ? (
+                      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">{vixInterpretation}</p>
+                    ) : (
+                      <p className="mt-2 text-[11px] text-muted">VIX 数据缺失</p>
+                    )}
+                  </div>
+                  <div className="rounded-lg border border-border2 bg-white/[0.02] px-3 py-2">
+                    <div className="text-[10px] uppercase tracking-wider text-muted">P/C 成交量比</div>
+                    <div className="mt-1 font-mono text-lg font-semibold text-foreground">
+                      {pcr !== null ? pcr.toFixed(2) : "—"}
+                    </div>
+                    <p className="mt-0.5 text-[10px] text-muted">全市场 Put/Call 成交量近似</p>
+                    {pcrInterpretation ? (
+                      <p className="mt-2 text-[11px] leading-5 text-muted-foreground">{pcrInterpretation}</p>
+                    ) : (
+                      <p className="mt-2 text-[11px] text-muted">P/C 数据缺失</p>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
