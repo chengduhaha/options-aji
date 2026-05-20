@@ -98,6 +98,10 @@ type OptionCandidate = {
 };
 
 const QUICK_SYMBOLS = ["SPY", "QQQ", "NVDA", "TSLA", "AAPL", "AMD"];
+/** Rolling Discord window for market overview (matches backend war-room). */
+const DISCORD_EVENT_HOURS = 6;
+/** Auto-refresh market overview + Discord-backed events. */
+const WAR_ROOM_REFRESH_MS = 5 * 60 * 1000;
 const ACTIVE_EVENT_KINDS = new Set(["discord", "macro", "news"]);
 
 const EMPTY_WAR_ROOM: WarRoomData = {
@@ -733,6 +737,7 @@ export default function MvpPage() {
   const [apiKey, setApiKey] = useState("");
   const [warRoom, setWarRoom] = useState<WarRoomData>(EMPTY_WAR_ROOM);
   const [warLoading, setWarLoading] = useState(true);
+  const [warRoomUpdatedAt, setWarRoomUpdatedAt] = useState<string | null>(null);
   const [symbol, setSymbol] = useState("SPY");
   const [direction, setDirection] = useState<Direction>("bull");
   const [report, setReport] = useState<StockReport | null>(null);
@@ -748,26 +753,34 @@ export default function MvpPage() {
 
   const deepMode = Boolean(auth.token || apiKey.trim().length >= 8);
 
-  const loadWarRoom = useCallback(async () => {
-    setWarLoading(true);
+  const loadWarRoom = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setWarLoading(true);
     const today = beijingDateString(0);
     const tomorrow = beijingDateString(1);
     const [mvp, overview, brief, macro, treasury, news, feed, signals] = await Promise.all([
-      settle<JsonRecord>(() => fetchJson("/api/mvp/war-room?hours=6")),
+      settle<JsonRecord>(() => fetchJson(`/api/mvp/war-room?hours=${DISCORD_EVENT_HOURS}`)),
       settle<MarketOverviewContract>(() => api.market.overview()),
       settle<{ brief?: string }>(() => api.market.brief() as Promise<{ brief?: string }>),
       settle<JsonRecord>(() => api.macro.calendar(today, tomorrow, "US") as Promise<JsonRecord>),
       settle<JsonRecord>(() => api.macro.treasury(30) as Promise<JsonRecord>),
       settle<JsonRecord>(() => api.news.latest() as Promise<JsonRecord>),
-      settle<FeedEnvelopeContract>(() => api.feed.unified(80, undefined, { kind: "discord" })),
+      settle<FeedEnvelopeContract>(() =>
+        api.feed.unified(80, undefined, { kind: "discord", hours: DISCORD_EVENT_HOURS }),
+      ),
       settle<SignalsFeedEnvelopeContract>(() => api.market.signalsFeed()),
     ]);
     setWarRoom({ mvp, overview, brief, macro, treasury, news, feed, signals });
-    setWarLoading(false);
+    const mvpGenerated = text(mvp.data?.generated_at_utc);
+    setWarRoomUpdatedAt(mvpGenerated || new Date().toISOString());
+    if (!opts?.silent) setWarLoading(false);
   }, []);
 
   useEffect(() => {
     void loadWarRoom();
+    const timer = window.setInterval(() => {
+      void loadWarRoom({ silent: true });
+    }, WAR_ROOM_REFRESH_MS);
+    return () => window.clearInterval(timer);
   }, [loadWarRoom]);
 
   const runStockReport = useCallback(async (nextSymbol?: string) => {
@@ -885,11 +898,11 @@ export default function MvpPage() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
               <Pill tone="gold">MVP</Pill>
-              <span>北京时间 21:30 美股开盘前作战台</span>
+              <span>实时市场简报</span>
               <span className="hidden md:inline">/mvp</span>
             </div>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-              今日作战室
+              盘前战略中心
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -905,6 +918,7 @@ export default function MvpPage() {
             <button
               type="button"
               onClick={() => void loadWarRoom()}
+              title="立即刷新市场总览与 Discord 事件"
               className="inline-flex items-center gap-2 rounded-lg border border-gold/30 bg-gold/10 px-3 py-2 text-sm text-gold transition hover:bg-gold/15"
             >
               <RefreshCw className={`h-4 w-4 ${warLoading ? "animate-spin" : ""}`} />
@@ -919,8 +933,13 @@ export default function MvpPage() {
               <div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <CalendarClock className="h-4 w-4 text-gold" />
-                  盘前总览
+                  市场总览
                 </div>
+                {warRoomUpdatedAt ? (
+                  <p className="mt-1 text-[10px] text-muted">
+                    Discord 最近 {DISCORD_EVENT_HOURS} 小时 · 每 5 分钟更新 · 上次 {zhTime(warRoomUpdatedAt)}
+                  </p>
+                ) : null}
                 <div className="mt-3 flex items-center gap-3">
                   <MarketIcon className={`h-8 w-8 ${marketState.tone}`} />
                   <div>
@@ -943,13 +962,16 @@ export default function MvpPage() {
 
             <div className="mt-5 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px]">
               <div className="min-h-[220px]">
-                <div className="mb-2 flex items-center gap-2 text-xs text-muted">
+                <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted">
                   <Newspaper className="h-4 w-4 text-blue" />
-                  影响今日交易的事件
+                  <span>盘前关键事件</span>
+                  <span className="text-[10px] text-muted-foreground">
+                    （Discord 滚动 {DISCORD_EVENT_HOURS}h）
+                  </span>
                 </div>
                 <div className="space-y-2">
                   {warLoading && events.length === 0 ? (
-                    <EmptyLine text="正在载入盘前事件..." />
+                    <EmptyLine text="正在载入盘前关键事件..." />
                   ) : events.length === 0 ? (
                     <EmptyLine text="暂无高优先级事件，先观察指数、VIX 与开盘前成交量。" />
                   ) : (
@@ -1055,7 +1077,7 @@ export default function MvpPage() {
             <div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Search className="h-4 w-4 text-gold" />
-                股票交易分析器
+                标的深度分析
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {QUICK_SYMBOLS.map((sym) => (
@@ -1123,7 +1145,7 @@ export default function MvpPage() {
               <div>
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <LineChartIcon className="h-4 w-4 text-blue" />
-                  正股价格是否合适
+                  入场时机评估
                 </div>
                 <div className="mt-3 flex items-center gap-3">
                   <div className={`text-lg font-semibold ${stockBias.tone}`}>{stockBias.label}</div>
@@ -1233,7 +1255,7 @@ export default function MvpPage() {
           <Card className="p-4">
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <ShieldAlert className="h-4 w-4 text-red" />
-              风险与等待条件
+              风控清单
             </div>
             <div className="mt-4 space-y-3">
               {checklist.map((item) => (

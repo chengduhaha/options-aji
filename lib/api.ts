@@ -212,6 +212,8 @@ export const api = {
         sentiment?: string;
         priority?: string;
         kol_only?: boolean;
+        /** Rolling window for Discord/macro rows (default 72 on backend). */
+        hours?: number;
       },
     ) => {
       const params = new URLSearchParams({ limit: String(limit) });
@@ -220,6 +222,9 @@ export const api = {
       if (filters?.sentiment) params.set("sentiment", filters.sentiment);
       if (filters?.priority) params.set("priority", filters.priority);
       if (filters?.kol_only) params.set("kol_only", "true");
+      if (filters?.hours != null && filters.hours > 0) {
+        params.set("hours", String(filters.hours));
+      }
       return fetchJSON<FeedEnvelopeContract>(`/api/feed/unified?${params}`);
     },
   },
