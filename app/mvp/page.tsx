@@ -37,6 +37,12 @@ import {
 import { interpretPCR, interpretVix } from "@/components/shared/DataLabel";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import {
+  type MvpMarketRegimeCode,
+  classifyRegimeFromMetrics,
+  normalizeRegimeCode,
+  regimeMeta,
+} from "@/lib/market-regime";
 import type {
   AnalystPriceTargetContract,
   FeedEnvelopeContract,
@@ -403,11 +409,11 @@ function getTreasuryRows(payload: JsonRecord | null): JsonRecord[] {
 }
 
 type MarketStateView = {
+  code: MvpMarketRegimeCode;
   label: string;
   tone: string;
   icon: typeof TrendingUp;
   summary: string;
-  /** 规则引擎依据（非 LLM），便于用户核对是否合理 */
   basis: string[];
   engineNote: string;
 };
@@ -433,51 +439,31 @@ function classifyMarket(overview: MarketOverviewContract | null, signals: Signal
   ];
 
   const engineNote = "阿吉深度洞察暂不可用，以下为盘面依据供对照。";
-
-  if (avgIndex <= -0.35 || (vixChange !== null && vixChange > 3) || signalScore <= -5) {
-    const triggers: string[] = [];
-    if (avgIndex <= -0.35) triggers.push("指数均值 ≤ -0.35%");
-    if (vixChange !== null && vixChange > 3) triggers.push("VIX 日涨幅 > 3%");
-    if (signalScore <= -5) triggers.push("信号得分 ≤ -5（偏空）");
-    return {
-      label: "风险优先",
-      tone: "text-red",
-      icon: TrendingDown,
-      summary: "指数或波动率显示压力，应先定义失效条件，再考虑方向。",
-      basis: [...basis, `触发：${triggers.join(" 或 ")}`],
-      engineNote,
-    };
-  }
-  if (avgIndex >= 0.35 && (vixChange === null || vixChange < 2) && signalScore >= 0) {
-    return {
-      label: "顺势进攻",
-      tone: "text-green",
-      icon: TrendingUp,
-      summary: "风险偏好偏积极，优先寻找强势板块中的回踩机会。",
-      basis: [...basis, "触发：指数均值 ≥ +0.35% 且 VIX 未急升 且 信号得分 ≥ 0"],
-      engineNote,
-    };
-  }
+  const classified = classifyRegimeFromMetrics({
+    avgIndex,
+    vix,
+    vixChange,
+    vixBand,
+    signalScore,
+  });
+  const meta = regimeMeta(classified.code);
   return {
-    label: "等待确认",
-    tone: "text-gold",
-    icon: Gauge,
-    summary: "多空信号未形成共识，适合缩小观察名单、等待量价确认。",
-    basis: [...basis, "触发：未满足「风险优先」或「顺势进攻」条件"],
+    code: classified.code,
+    label: classified.label,
+    tone: meta.tone,
+    icon: regimeIcon(classified.code),
+    summary: classified.summary,
+    basis: [...basis, classified.reasoning],
     engineNote,
   };
 }
 
-function regimeTone(label: string): string {
-  if (label === "风险优先") return "text-red";
-  if (label === "顺势进攻") return "text-green";
-  return "text-gold";
-}
-
-function regimeIcon(label: string): typeof TrendingUp {
-  if (label === "风险优先") return TrendingDown;
-  if (label === "顺势进攻") return TrendingUp;
-  return Gauge;
+function regimeIcon(code: MvpMarketRegimeCode): typeof TrendingUp {
+  if (code === "risk_off") return TrendingDown;
+  if (code === "risk_on") return TrendingUp;
+  if (code === "elevated_vol") return Gauge;
+  if (code === "range_bound") return BarChart3;
+  return Clock3;
 }
 
 function engineNoteFromInsights(insights: MvpMarketInsightsContract | null): string {
@@ -489,11 +475,14 @@ function marketStateFromInsights(
   insights: MvpMarketInsightsContract,
   fallback: MarketStateView,
 ): MarketStateView {
-  const label = insights.regime.label || fallback.label;
+  const code =
+    normalizeRegimeCode(insights.regime.code, insights.regime.label) ?? fallback.code;
+  const meta = regimeMeta(code);
   return {
-    label,
-    tone: regimeTone(label),
-    icon: regimeIcon(label),
+    code,
+    label: insights.regime.label || meta.label,
+    tone: meta.tone,
+    icon: regimeIcon(code),
     summary: insights.regime.summary || fallback.summary,
     basis: insights.regime.basis?.length ? insights.regime.basis : fallback.basis,
     engineNote: engineNoteFromInsights(insights),
@@ -770,7 +759,7 @@ function buildTreasuryRead(latest: JsonRecord) {
 
 function buildTradePlan(args: {
   brief?: string;
-  marketLabel: string;
+  marketCode: MvpMarketRegimeCode;
   events: EventItem[];
   treasurySummary: string;
   vix: number | null;
@@ -784,12 +773,16 @@ function buildTradePlan(args: {
   if (topEvent) {
     plan.push(`盘前主线先围绕「${topEvent.title}」做情景推演，相关标的只等开盘后量价确认。`);
   }
-  if (args.marketLabel === "风险优先") {
-    plan.push("市场状态偏防守，开盘前先定义失效条件；第一笔仓位控制在计划仓位的 1/3 以内。");
-  } else if (args.marketLabel === "顺势进攻") {
-    plan.push("风险偏好偏积极，优先找强势板块龙头的回踩确认，不在第一根大阳线追价。");
+  if (args.marketCode === "risk_off") {
+    plan.push("盘面处于避险环境（Risk-Off），宜先梳理敞口与对冲需求，再讨论方向假设。");
+  } else if (args.marketCode === "elevated_vol") {
+    plan.push("高波动环境下，期权溢价与 Gamma 敏感度高，优先控制权利金与仓位规模。");
+  } else if (args.marketCode === "risk_on") {
+    plan.push("风险偏好偏积极（Risk-On），可观察板块强弱与期限结构，避免将环境标签等同于做多信号。");
+  } else if (args.marketCode === "range_bound") {
+    plan.push("中性震荡格局，缩小观察名单，等待指数与波动率给出同向突破。");
   } else {
-    plan.push("市场方向未形成共识，开盘后等待 15-30 分钟，确认 SPY/QQQ 是否同向放量。");
+    plan.push("过渡观察阶段，指标存在分歧，开盘后等待 15–30 分钟再验证 SPY/QQQ 量价。");
   }
   if ((args.vixChange ?? 0) > 3 || (args.vix ?? 0) >= 20) {
     plan.push("VIX 抬升时减少裸买期权，优先用价差或更小仓位控制权利金损耗。");
@@ -1123,7 +1116,7 @@ export default function MvpPage() {
     ? mvpTradePlan
     : buildTradePlan({
         brief: warRoom.brief.data?.brief,
-        marketLabel: marketState.label,
+        marketCode: marketState.code,
         events,
         treasurySummary: treasuryRead.summary,
         vix: overview?.volatility.vix ?? null,
@@ -1137,11 +1130,11 @@ export default function MvpPage() {
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
               <Pill tone="gold">MVP</Pill>
-              <span>实时市场简报</span>
+              <span>美股市场分析</span>
               <span className="hidden md:inline">/mvp</span>
             </div>
             <h1 className="mt-2 text-2xl font-semibold tracking-tight text-foreground md:text-3xl">
-              盘前战略中心
+              阿吉市场洞察
             </h1>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1212,7 +1205,7 @@ export default function MvpPage() {
               <div className="min-h-[220px]">
                 <div className="mb-2 flex items-center gap-2 text-xs text-muted">
                   <Newspaper className="h-4 w-4 text-blue" />
-                  <span>盘前关键事件</span>
+                  <span>市场关键事件</span>
                 </div>
                 <div className="space-y-2">
                   {warLoading && events.length === 0 ? (

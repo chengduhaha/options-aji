@@ -1,3 +1,5 @@
+import type { MvpMarketRegimeCode } from "@/lib/market-regime";
+
 export interface MarketPulseRow {
   symbol: string;
   yahooSymbol?: string;
@@ -64,11 +66,11 @@ export interface AgentBriefContract {
   brief?: string;
 }
 
-export type MvpMarketRegimeLabel = "风险优先" | "顺势进攻" | "等待确认";
-
 export interface MvpMarketInsightsContract {
   regime: {
-    label: MvpMarketRegimeLabel | string;
+    /** 稳定枚举：risk_off | elevated_vol | risk_on | range_bound | transitional */
+    code: MvpMarketRegimeCode;
+    label: string;
     summary: string;
     reasoning?: string;
     basis?: string[];
