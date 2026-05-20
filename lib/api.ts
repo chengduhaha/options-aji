@@ -14,6 +14,7 @@ import type {
   KolDirectoryContract,
   MarketOverviewContract,
   MvpMarketInsightsContract,
+  StockOptionsInsightsContract,
   PushSettingsContract,
   ResonanceStreamContract,
   ScannerRunContract,
@@ -125,6 +126,21 @@ export const api = {
     brief: () => fetchJSON<AgentBriefContract>("/api/agent/brief"),
     signalsFeed: () => fetchJSON<SignalsFeedEnvelopeContract>("/api/signals/feed"),
     mvpMarketInsights: () => fetchJSON<MvpMarketInsightsContract>("/api/mvp/market-insights"),
+    stockOptionsInsights: (payload: {
+      symbol: string;
+      direction: "bull" | "bear";
+      spot?: number | null;
+      iv_rank?: number | null;
+      expected_moves: Array<{ bucket: string; pct: number; straddleUsd: number; expiration: string }>;
+      contracts: Array<Record<string, unknown>>;
+      unusual_items?: Array<Record<string, unknown>>;
+      market_regime_code?: string | null;
+      market_regime_label?: string | null;
+    }) =>
+      fetchJSON<StockOptionsInsightsContract>("/api/mvp/stock-options-insights", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      }),
   },
 
   options: {

@@ -66,6 +66,20 @@ export interface AgentBriefContract {
   brief?: string;
 }
 
+export interface StockOptionsInsightsContract {
+  framework_summary: string;
+  contracts_note: string;
+  expected_moves: Array<{
+    bucket: string;
+    bucket_zh: string;
+    interpretation: string;
+  }>;
+  combined_insight: string;
+  engine: "deepagents" | "fallback" | "rules";
+  generated_at_utc: string;
+  cached?: boolean;
+}
+
 export interface MvpMarketInsightsContract {
   regime: {
     /** 稳定枚举：risk_off | elevated_vol | risk_on | range_bound | transitional */

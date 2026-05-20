@@ -38,6 +38,12 @@ import { interpretPCR, interpretVix } from "@/components/shared/DataLabel";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import {
+  OPTION_FRAMEWORK_INTRO,
+  OPTION_TABLE_LEGEND,
+  expectedMoveBucketHint,
+  expectedMoveBucketLabel,
+} from "@/lib/option-framework";
+import {
   type MvpMarketRegimeCode,
   classifyRegimeFromMetrics,
   normalizeRegimeCode,
@@ -52,6 +58,7 @@ import type {
   SignalCardContract,
   SignalsFeedEnvelopeContract,
   SmartVsRetailContract,
+  StockOptionsInsightsContract,
   StockOverviewContract,
 } from "@/lib/contracts";
 
@@ -83,6 +90,7 @@ type StockReport = {
   chain: AsyncSlot<JsonRecord>;
   unusual: AsyncSlot<JsonRecord>;
   strategy: AsyncSlot<JsonRecord>;
+  optionsInsights: AsyncSlot<StockOptionsInsightsContract>;
 };
 
 type EventDetail = {
@@ -655,6 +663,21 @@ function normalizeOptionCandidates(payload: JsonRecord | null, direction: Direct
     .slice(0, 8);
 }
 
+function contractsForInsights(rows: OptionCandidate[]): JsonRecord[] {
+  return rows.map((row) => ({
+    side: row.side,
+    strike: row.strike,
+    expiration: row.expiration,
+    dte: row.dte,
+    volume: row.volume,
+    open_interest: row.openInterest,
+    iv_pct: row.ivPct,
+    delta: row.delta,
+    bid: row.bid,
+    ask: row.ask,
+  }));
+}
+
 function normalizeOptionActivity(payload: JsonRecord | null): JsonRecord[] {
   if (!payload) return [];
   const contracts = asArray(payload.contracts);
@@ -1018,9 +1041,30 @@ export default function MvpPage() {
       ),
       settle<JsonRecord>(() => api.stock.strategyIdeas(sym) as Promise<JsonRecord>),
     ]);
-    setReport({ overview, priceTarget, smart, news, chain, unusual, strategy });
+    const overviewData = overview.data;
+    const chainData = chain.data;
+    const candidates = normalizeOptionCandidates(chainData, direction);
+    const strictUnusual = asArray(unusual.data?.items).map(asRecord).slice(0, 5);
+    const hotOpts = normalizeOptionActivity(chainData).slice(0, 5);
+    const unusualForInsight = strictUnusual.length > 0 ? strictUnusual : hotOpts;
+    const regimeInsight = warRoom.marketInsights.data?.regime;
+    const insightDirection: "bull" | "bear" = direction === "bear" ? "bear" : "bull";
+    const optionsInsights = await settle<StockOptionsInsightsContract>(() =>
+      api.market.stockOptionsInsights({
+        symbol: sym,
+        direction: insightDirection,
+        spot: num(overviewData?.bar?.price),
+        iv_rank: num(overviewData?.keyStats?.ivRank),
+        expected_moves: overviewData?.expectedMoves ?? [],
+        contracts: contractsForInsights(candidates),
+        unusual_items: unusualForInsight,
+        market_regime_code: regimeInsight?.code ?? null,
+        market_regime_label: regimeInsight?.label ?? null,
+      }),
+    );
+    setReport({ overview, priceTarget, smart, news, chain, unusual, strategy, optionsInsights });
     setReportLoading(false);
-  }, [symbol]);
+  }, [symbol, direction]);
 
   useEffect(() => {
     void runStockReport("SPY");
@@ -1104,6 +1148,10 @@ export default function MvpPage() {
   const hotOptionItems = normalizeOptionActivity(report?.chain.data ?? null).slice(0, 5);
   const unusualItems = strictUnusualItems.length > 0 ? strictUnusualItems : hotOptionItems;
   const strategyIdeas = asArray(report?.strategy.data?.ideas).map(asRecord).slice(0, 3);
+  const optionsInsights = report?.optionsInsights.data;
+  const expectedMoveReads = new Map(
+    (optionsInsights?.expected_moves ?? []).map((row) => [row.bucket, row]),
+  );
   const priceTarget = report?.priceTarget.data;
   const ptAvg = priceTarget?.summary?.lastMonthAvgPriceTarget ?? priceTarget?.consensus?.priceTarget ?? null;
   const spot = num(stockOverview?.bar?.price);
@@ -1477,9 +1525,14 @@ export default function MvpPage() {
 
           <Card className="p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <WalletCards className="h-4 w-4 text-gold" />
-                期权选择框架
+              <div>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <WalletCards className="h-4 w-4 text-gold" />
+                  期权选择框架
+                </div>
+                <p className="mt-1 max-w-3xl text-[11px] leading-5 text-muted">
+                  {optionsInsights?.framework_summary ?? OPTION_FRAMEWORK_INTRO}
+                </p>
               </div>
               {!deepMode ? (
                 <Pill tone="muted">
@@ -1491,18 +1544,34 @@ export default function MvpPage() {
               )}
             </div>
 
+            {optionsInsights?.combined_insight ? (
+              <div className="mt-3 rounded-lg border border-gold/20 bg-gold/5 px-3 py-2">
+                <div className="text-[10px] font-medium text-gold">阿吉深度洞察</div>
+                <p className="mt-1 text-[11px] leading-5 text-muted-foreground">{optionsInsights.combined_insight}</p>
+              </div>
+            ) : reportLoading ? (
+              <p className="mt-2 text-[11px] text-muted">阿吉深度洞察生成中…</p>
+            ) : null}
+
+            <p className="mt-2 text-[10px] leading-5 text-muted">
+              {optionsInsights?.contracts_note ?? OPTION_TABLE_LEGEND}
+            </p>
+
             <div className="mt-4 grid grid-cols-1 gap-3 lg:grid-cols-[1fr_220px]">
               <div className="overflow-hidden rounded-lg border border-border2">
-                <div className="grid grid-cols-[0.9fr_0.9fr_0.8fr_0.8fr_0.8fr] bg-white/[0.03] px-3 py-2 text-[11px] text-muted">
+                <div className="border-b border-border2 bg-white/[0.02] px-3 py-1.5 text-[10px] text-muted">
+                  流动性筛选合约（{direction === "bull" ? "看涨 Call" : "看跌 Put"}，非异动榜）
+                </div>
+                <div className="grid grid-cols-[0.9fr_0.9fr_0.8fr_0.8fr_1fr] bg-white/[0.03] px-3 py-2 text-[11px] text-muted">
                   <span>合约</span>
-                  <span>到期</span>
-                  <span>DTE</span>
-                  <span>IV</span>
-                  <span>量/OI</span>
+                  <span>到期日</span>
+                  <span title="距离到期的交易日天数">剩余天数</span>
+                  <span title="隐含波动率 Implied Volatility">隐含波动率</span>
+                  <span title="当日成交量 / 未平仓合约数 Open Interest">成交量/持仓</span>
                 </div>
                 {optionCandidates.length > 0 ? (
                   optionCandidates.slice(0, 6).map((row) => (
-                    <div key={`${row.side}-${row.expiration}-${row.strike}`} className="grid grid-cols-[0.9fr_0.9fr_0.8fr_0.8fr_0.8fr] border-t border-border2 px-3 py-2 text-xs">
+                    <div key={`${row.side}-${row.expiration}-${row.strike}`} className="grid grid-cols-[0.9fr_0.9fr_0.8fr_0.8fr_1fr] border-t border-border2 px-3 py-2 text-xs">
                       <span className={row.side === "call" ? "text-green" : "text-red"}>
                         {row.side.toUpperCase()} {row.strike}
                       </span>
@@ -1520,15 +1589,25 @@ export default function MvpPage() {
               </div>
 
               <div className="space-y-2">
-                {(stockOverview?.expectedMoves ?? []).slice(0, 3).map((move) => (
+                <div className="text-[10px] font-medium text-muted-foreground">隐含预期波动（Expected Move）</div>
+                {(stockOverview?.expectedMoves ?? []).slice(0, 3).map((move) => {
+                  const aiMove = expectedMoveReads.get(move.bucket);
+                  return (
                   <div key={move.bucket} className="rounded-lg border border-border2 bg-white/[0.02] px-3 py-2">
-                    <div className="text-[11px] text-muted">{move.bucket}</div>
-                    <div className="font-mono text-sm text-foreground">
+                    <div className="text-[11px] font-medium text-foreground">
+                      {aiMove?.bucket_zh ?? expectedMoveBucketLabel(move.bucket)}
+                    </div>
+                    <div className="mt-0.5 text-[10px] text-muted">{expectedMoveBucketHint(move.bucket)}</div>
+                    <div className="mt-1 font-mono text-sm text-foreground">
                       ±{move.pct.toFixed(2)}% · {money(move.straddleUsd)}
                     </div>
-                    <div className="mt-1 text-[10px] text-muted">{move.expiration}</div>
+                    <div className="mt-1 text-[10px] text-muted">到期 {move.expiration}</div>
+                    {aiMove?.interpretation ? (
+                      <p className="mt-2 text-[10px] leading-4 text-muted-foreground">{aiMove.interpretation}</p>
+                    ) : null}
                   </div>
-                ))}
+                  );
+                })}
                 {strategyIdeas.map((idea) => (
                   <div key={text(idea.id) || text(idea.title)} className="rounded-lg border border-border2 bg-white/[0.02] px-3 py-2">
                     <div className="text-xs font-medium text-foreground">{text(idea.title)}</div>
